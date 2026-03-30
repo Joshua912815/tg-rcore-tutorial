@@ -52,13 +52,13 @@ use riscv::register::*;
 use stub::Sv39;
 use tg_console::log;
 // 异界传送门：解决跨地址空间上下文切换的核心组件
-use tg_kernel_context::{foreign::MultislotPortal, LocalContext};
+use tg_kernel_context::{LocalContext, foreign::MultislotPortal};
 // RISC-V64 使用真正的 Sv39 类型
 #[cfg(target_arch = "riscv64")]
 use tg_kernel_vm::page_table::Sv39;
 use tg_kernel_vm::{
-    page_table::{MmuMeta, VAddr, VmFlags, VmMeta, PPN, VPN},
     AddressSpace,
+    page_table::{MmuMeta, PPN, VAddr, VPN, VmFlags, VmMeta},
 };
 use tg_sbi;
 use tg_syscall::Caller;
@@ -249,6 +249,7 @@ extern "C" fn schedule() -> ! {
                 let ctx = &mut ctx.context;
                 let id: Id = ctx.a(7).into();
                 let args = [ctx.a(0), ctx.a(1), ctx.a(2), ctx.a(3), ctx.a(4), ctx.a(5)];
+                (unsafe { PROCESSES.get_mut() })[0].record_syscall(id.0);
                 match tg_syscall::handle(Caller { entity: 0, flow: 0 }, id, args) {
                     Ret::Done(ret) => match id {
                         // exit：移除进程
@@ -311,8 +312,8 @@ fn kernel_space(
         log::info!("{region}");
         use tg_linker::KernelRegionTitle::*;
         let flags = match region.title {
-            Text => "X_RV",    // 代码段：可执行、可读
-            Rodata => "__RV",  // 只读数据段：只读
+            Text => "X_RV",        // 代码段：可执行、可读
+            Rodata => "__RV",      // 只读数据段：只读
             Data | Boot => "_WRV", // 数据段/启动段：可读写
         };
         let s = VAddr::<Sv39>::new(region.range.start);
@@ -356,13 +357,13 @@ fn kernel_space(
 /// 与前几章不同，本章的系统调用实现需要进行**地址翻译**：
 /// 用户传入的指针是虚拟地址，内核需要通过页表将其翻译为物理地址才能访问。
 mod impls {
-    use crate::{build_flags, Sv39, PROCESSES};
+    use crate::{PROCESSES, Sv39, build_flags};
     use alloc::alloc::alloc_zeroed;
-    use core::{alloc::Layout, ptr::NonNull};
+    use core::{alloc::Layout, ops::Range, ptr::NonNull};
     use tg_console::log;
     use tg_kernel_vm::{
-        page_table::{MmuMeta, Pte, VAddr, VmFlags, PPN, VPN},
         PageManager,
+        page_table::{MmuMeta, PPN, Pte, VAddr, VPN, VmFlags},
     };
     use tg_syscall::*;
 
@@ -454,6 +455,65 @@ mod impls {
     /// 系统调用上下文实现
     pub struct SyscallContext;
 
+    impl SyscallContext {
+        const PAGE_SIZE: usize = 1 << Sv39::PAGE_BITS;
+        const USER_TOP: usize = 1 << 38;
+        const VALID: VmFlags<Sv39> = build_flags("__V");
+        const READABLE: VmFlags<Sv39> = build_flags("RV");
+        const WRITABLE: VmFlags<Sv39> = build_flags("W_V");
+
+        #[inline]
+        fn page_range(addr: usize, len: usize) -> Option<Range<VPN<Sv39>>> {
+            let start = VPN::new(addr >> Sv39::PAGE_BITS);
+            if len == 0 {
+                return Some(start..start);
+            }
+            let end = addr.checked_add(len)?;
+            Some(start..VAddr::<Sv39>::new(end).ceil())
+        }
+
+        #[inline]
+        fn is_page_aligned(addr: usize) -> bool {
+            addr & (Self::PAGE_SIZE - 1) == 0
+        }
+
+        #[inline]
+        fn is_user_vaddr(addr: usize) -> bool {
+            addr < Self::USER_TOP
+        }
+
+        #[inline]
+        fn is_user_range(addr: usize, len: usize) -> bool {
+            addr < Self::USER_TOP
+                && addr
+                    .checked_add(len)
+                    .is_some_and(|end| end <= Self::USER_TOP)
+        }
+
+        fn mmap_flags(prot: i32) -> Option<VmFlags<Sv39>> {
+            let prot = usize::try_from(prot).ok()?;
+            if prot & !0x7 != 0 || prot & 0x7 == 0 {
+                return None;
+            }
+            let mut flags = build_flags("U_V");
+            if prot & 0x1 != 0 {
+                flags |= build_flags("R");
+            }
+            if prot & 0x2 != 0 {
+                flags |= build_flags("W");
+            }
+            if prot & 0x4 != 0 {
+                flags |= build_flags("X");
+            }
+            Some(flags)
+        }
+
+        #[inline]
+        fn ranges_overlap(lhs: &Range<VPN<Sv39>>, rhs: &Range<VPN<Sv39>>) -> bool {
+            lhs.start < rhs.end && rhs.start < lhs.end
+        }
+    }
+
     /// IO 系统调用实现
     ///
     /// **与前几章的关键区别**：用户传入的 `buf` 是虚拟地址，
@@ -462,13 +522,11 @@ mod impls {
         fn write(&self, caller: Caller, fd: usize, buf: usize, count: usize) -> isize {
             match fd {
                 STDOUT | STDDEBUG => {
-                    // 检查用户地址是否可读
-                    const READABLE: VmFlags<Sv39> = build_flags("RV");
                     if let Some(ptr) = unsafe { PROCESSES.get_mut() }
                         .get_mut(caller.entity)
                         .unwrap()
                         .address_space
-                        .translate::<u8>(VAddr::new(buf), READABLE)
+                        .translate::<u8>(VAddr::new(buf), SyscallContext::READABLE)
                     {
                         print!("{}", unsafe {
                             core::str::from_utf8_unchecked(core::slice::from_raw_parts(
@@ -529,15 +587,13 @@ mod impls {
     impl Clock for SyscallContext {
         #[inline]
         fn clock_gettime(&self, caller: Caller, clock_id: ClockId, tp: usize) -> isize {
-            // 检查用户地址是否可写
-            const WRITABLE: VmFlags<Sv39> = build_flags("W_V");
             match clock_id {
                 ClockId::CLOCK_MONOTONIC => {
                     if let Some(mut ptr) = unsafe { PROCESSES.get_mut() }
                         .get_mut(caller.entity)
                         .unwrap()
                         .address_space
-                        .translate::<TimeSpec>(VAddr::new(tp), WRITABLE)
+                        .translate::<TimeSpec>(VAddr::new(tp), SyscallContext::WRITABLE)
                     {
                         let time = riscv::register::time::read() * 10000 / 125;
                         *unsafe { ptr.as_mut() } = TimeSpec {
@@ -563,15 +619,32 @@ mod impls {
     /// - 使用 translate() 方法进行地址翻译和权限检查
     impl Trace for SyscallContext {
         #[inline]
-        fn trace(
-            &self,
-            _caller: Caller,
-            _trace_request: usize,
-            _id: usize,
-            _data: usize,
-        ) -> isize {
-            tg_console::log::info!("trace: not implemented");
-            -1
+        fn trace(&self, caller: Caller, trace_request: usize, id: usize, data: usize) -> isize {
+            let process = unsafe { PROCESSES.get_mut() }
+                .get_mut(caller.entity)
+                .unwrap();
+            match trace_request {
+                0 if !Self::is_user_vaddr(id) => -1,
+                0 => process
+                    .address_space
+                    .translate::<u8>(VAddr::new(id), Self::READABLE)
+                    .map(|ptr| unsafe { ptr.as_ptr().read_volatile() as isize })
+                    .unwrap_or(-1),
+                1 if !Self::is_user_vaddr(id) => -1,
+                1 => {
+                    if let Some(ptr) = process
+                        .address_space
+                        .translate::<u8>(VAddr::new(id), Self::WRITABLE)
+                    {
+                        unsafe { ptr.as_ptr().write_volatile(data as u8) };
+                        0
+                    } else {
+                        -1
+                    }
+                }
+                2 => process.syscall_count(id) as isize,
+                _ => -1,
+            }
         }
     }
 
@@ -582,7 +655,7 @@ mod impls {
     impl Memory for SyscallContext {
         fn mmap(
             &self,
-            _caller: Caller,
+            caller: Caller,
             addr: usize,
             len: usize,
             prot: i32,
@@ -590,15 +663,63 @@ mod impls {
             _fd: i32,
             _offset: usize,
         ) -> isize {
-            tg_console::log::info!(
-                "mmap: addr = {addr:#x}, len = {len}, prot = {prot}, not implemented"
-            );
-            -1
+            if !Self::is_page_aligned(addr) || !Self::is_user_range(addr, len) {
+                return -1;
+            }
+            let Some(flags) = Self::mmap_flags(prot) else {
+                return -1;
+            };
+            let Some(range) = Self::page_range(addr, len) else {
+                return -1;
+            };
+            if range.is_empty() {
+                return 0;
+            }
+
+            let process = unsafe { PROCESSES.get_mut() }
+                .get_mut(caller.entity)
+                .unwrap();
+            if process
+                .address_space
+                .areas
+                .iter()
+                .any(|area| Self::ranges_overlap(area, &range))
+            {
+                return -1;
+            }
+
+            process.address_space.map(range, &[], 0, flags);
+            0
         }
 
-        fn munmap(&self, _caller: Caller, addr: usize, len: usize) -> isize {
-            tg_console::log::info!("munmap: addr = {addr:#x}, len = {len}, not implemented");
-            -1
+        fn munmap(&self, caller: Caller, addr: usize, len: usize) -> isize {
+            if !Self::is_page_aligned(addr) || !Self::is_user_range(addr, len) {
+                return -1;
+            }
+            let Some(range) = Self::page_range(addr, len) else {
+                return -1;
+            };
+            if range.is_empty() {
+                return 0;
+            }
+
+            let process = unsafe { PROCESSES.get_mut() }
+                .get_mut(caller.entity)
+                .unwrap();
+            let mut vpn = range.start;
+            while vpn < range.end {
+                if process
+                    .address_space
+                    .translate::<u8>(vpn.base(), Self::VALID)
+                    .is_none()
+                {
+                    return -1;
+                }
+                vpn = vpn + 1;
+            }
+
+            process.address_space.unmap(range);
+            0
         }
     }
 }

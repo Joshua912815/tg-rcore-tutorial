@@ -19,19 +19,22 @@
 //! - 再看 `change_program_brk`：理解 sbrk 对页映射范围的影响；
 //! - 最后结合 `ch4/src/main.rs`：对齐“进程对象创建”和“调度执行”两条路径。
 
-use crate::{build_flags, parse_flags, Sv39, Sv39Manager};
+use crate::{Sv39, Sv39Manager, build_flags, parse_flags};
 use alloc::alloc::alloc_zeroed;
 use core::alloc::Layout;
 use tg_console::log;
-use tg_kernel_context::{foreign::ForeignContext, LocalContext};
+use tg_kernel_context::{LocalContext, foreign::ForeignContext};
 use tg_kernel_vm::{
-    page_table::{MmuMeta, VAddr, PPN, VPN},
     AddressSpace,
+    page_table::{MmuMeta, PPN, VAddr, VPN},
 };
 use xmas_elf::{
+    ElfFile,
     header::{self, HeaderPt2, Machine},
-    program, ElfFile,
+    program,
 };
+
+const SYSCALL_COUNT_CAPACITY: usize = 16;
 
 /// 进程结构体
 ///
@@ -49,6 +52,10 @@ pub struct Process {
     pub heap_bottom: usize,
     /// 当前程序 break 位置（堆顶）
     pub program_brk: usize,
+    /// 已观测到的 syscall ID（稀疏记录）
+    syscall_ids: [usize; SYSCALL_COUNT_CAPACITY],
+    /// 对应 syscall 的调用次数
+    syscall_counts: [usize; SYSCALL_COUNT_CAPACITY],
 }
 
 impl Process {
@@ -150,6 +157,8 @@ impl Process {
             address_space,
             heap_bottom,
             program_brk: heap_bottom,
+            syscall_ids: [usize::MAX; SYSCALL_COUNT_CAPACITY],
+            syscall_counts: [0; SYSCALL_COUNT_CAPACITY],
         })
     }
 
@@ -186,5 +195,29 @@ impl Process {
 
         self.program_brk = new_brk;
         Some(old_brk)
+    }
+
+    /// 记录一次系统调用。
+    pub fn record_syscall(&mut self, id: usize) {
+        for i in 0..SYSCALL_COUNT_CAPACITY {
+            if self.syscall_ids[i] == id {
+                self.syscall_counts[i] += 1;
+                return;
+            }
+            if self.syscall_ids[i] == usize::MAX {
+                self.syscall_ids[i] = id;
+                self.syscall_counts[i] = 1;
+                return;
+            }
+        }
+    }
+
+    /// 查询某个系统调用的累计次数。
+    pub fn syscall_count(&self, id: usize) -> usize {
+        self.syscall_ids
+            .iter()
+            .zip(self.syscall_counts.iter())
+            .find_map(|(&syscall_id, &count)| (syscall_id == id).then_some(count))
+            .unwrap_or(0)
     }
 }
