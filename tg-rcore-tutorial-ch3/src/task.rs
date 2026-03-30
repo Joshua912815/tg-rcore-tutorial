@@ -18,6 +18,61 @@
 use tg_kernel_context::LocalContext;
 use tg_syscall::{Caller, SyscallId};
 
+const TASK_CAPACITY: usize = 32;
+const SYSCALL_COUNT_CAPACITY: usize = 16;
+static CURRENT_TASK: core::sync::atomic::AtomicUsize =
+    core::sync::atomic::AtomicUsize::new(usize::MAX);
+static mut SYSCALL_IDS: [[usize; SYSCALL_COUNT_CAPACITY]; TASK_CAPACITY] =
+    [[usize::MAX; SYSCALL_COUNT_CAPACITY]; TASK_CAPACITY];
+static mut SYSCALL_COUNTS: [[usize; SYSCALL_COUNT_CAPACITY]; TASK_CAPACITY] =
+    [[0; SYSCALL_COUNT_CAPACITY]; TASK_CAPACITY];
+
+pub fn init_task_trace(task_id: usize) {
+    unsafe {
+        SYSCALL_IDS[task_id].fill(usize::MAX);
+        SYSCALL_COUNTS[task_id].fill(0);
+    }
+}
+
+pub fn set_current_task(task_id: usize) {
+    CURRENT_TASK.store(task_id, core::sync::atomic::Ordering::Relaxed);
+}
+
+pub fn current_task_syscall_count(id: usize) -> Option<usize> {
+    let task_id = CURRENT_TASK.load(core::sync::atomic::Ordering::Relaxed);
+    (task_id != usize::MAX).then(|| syscall_count(task_id, id))
+}
+
+fn record_current_task_syscall(id: SyscallId) {
+    let task_id = CURRENT_TASK.load(core::sync::atomic::Ordering::Relaxed);
+    if task_id == usize::MAX {
+        return;
+    }
+    unsafe {
+        for i in 0..SYSCALL_COUNT_CAPACITY {
+            if SYSCALL_IDS[task_id][i] == id.0 {
+                SYSCALL_COUNTS[task_id][i] += 1;
+                return;
+            }
+            if SYSCALL_IDS[task_id][i] == usize::MAX {
+                SYSCALL_IDS[task_id][i] = id.0;
+                SYSCALL_COUNTS[task_id][i] = 1;
+                return;
+            }
+        }
+    }
+}
+
+fn syscall_count(task_id: usize, id: usize) -> usize {
+    unsafe {
+        SYSCALL_IDS[task_id]
+            .iter()
+            .zip(SYSCALL_COUNTS[task_id].iter())
+            .find_map(|(&syscall_id, &count)| (syscall_id == id).then_some(count))
+            .unwrap_or(0)
+    }
+}
+
 /// 任务控制块（Task Control Block, TCB）
 ///
 /// 每个用户程序对应一个 TCB，包含：
@@ -98,6 +153,7 @@ impl TaskControlBlock {
             self.ctx.a(4),
             self.ctx.a(5),
         ];
+        record_current_task_syscall(id);
         match tg_syscall::handle(Caller { entity: 0, flow: 0 }, id, args) {
             Ret::Done(ret) => match id {
                 // exit 系统调用：返回退出事件
@@ -119,4 +175,5 @@ impl TaskControlBlock {
             Ret::Unsupported(_) => Event::UnsupportedSyscall(id),
         }
     }
+
 }

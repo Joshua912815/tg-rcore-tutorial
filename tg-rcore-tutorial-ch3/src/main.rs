@@ -110,6 +110,7 @@ extern "C" fn rust_main() -> ! {
         let entry = app.as_ptr() as usize;
         log::info!("load app{i} to {entry:#x}");
         tcbs[i].init(entry);
+        task::init_task_trace(i);
         index_mod += 1;
     }
     println!();
@@ -126,6 +127,7 @@ extern "C" fn rust_main() -> ! {
         let tcb = &mut tcbs[i];
         if !tcb.finish {
             loop {
+                task::set_current_task(i);
                 // 【抢占式调度】设置时钟中断：12500 个时钟周期后触发
                 // 当 coop feature 启用时，跳过此步（协作式调度，不使用时钟中断）
                 #[cfg(not(feature = "coop"))]
@@ -210,6 +212,7 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
 
 /// 各依赖库所需接口的具体实现
 mod impls {
+    use crate::task;
     use tg_syscall::*;
 
     /// 控制台实现：通过 SBI 逐字符输出
@@ -306,12 +309,21 @@ mod impls {
         fn trace(
             &self,
             _caller: Caller,
-            _trace_request: usize,
-            _id: usize,
-            _data: usize,
+            trace_request: usize,
+            id: usize,
+            data: usize,
         ) -> isize {
-            tg_console::log::info!("trace: not implemented");
-            -1
+            match trace_request {
+                0 => unsafe { (id as *const u8).read_volatile() as isize },
+                1 => {
+                    unsafe { (id as *mut u8).write_volatile(data as u8) };
+                    0
+                }
+                2 => task::current_task_syscall_count(id)
+                    .map(|count| count as isize)
+                    .unwrap_or(-1),
+                _ => -1,
+            }
         }
     }
 }
