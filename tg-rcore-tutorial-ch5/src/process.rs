@@ -50,9 +50,16 @@ pub struct Process {
     pub heap_bottom: usize,
     /// 当前程序 break 位置（堆顶），通过 sbrk 调整
     pub program_brk: usize,
+    /// stride 调度算法中的当前累计步长
+    pub stride: u128,
+    /// 进程优先级，chapter5 练习要求默认值为 16
+    pub priority: usize,
 }
 
 impl Process {
+    const DEFAULT_PRIORITY: usize = 16;
+    const BIG_STRIDE: u128 = u128::MAX >> 1;
+
     /// exec 系统调用的核心实现：用新程序替换当前进程
     ///
     /// 替换地址空间和上下文，但保留 PID。
@@ -89,6 +96,8 @@ impl Process {
             address_space,
             heap_bottom: self.heap_bottom,
             program_brk: self.program_brk,
+            stride: self.stride,
+            priority: self.priority,
         })
     }
 
@@ -192,7 +201,28 @@ impl Process {
             address_space,
             heap_bottom,
             program_brk: heap_bottom,
+            stride: 0,
+            priority: Self::DEFAULT_PRIORITY,
         })
+    }
+
+    /// 设置进程优先级。
+    #[inline]
+    pub fn set_priority(&mut self, priority: usize) {
+        self.priority = priority;
+    }
+
+    /// 计算当前优先级对应的 pass 值。
+    #[inline]
+    pub fn pass(&self) -> u128 {
+        let pass = Self::BIG_STRIDE / self.priority as u128;
+        pass.max(1)
+    }
+
+    /// 进程被调度一次后，stride 按 pass 递增。
+    #[inline]
+    pub fn advance_stride(&mut self) {
+        self.stride = self.stride.wrapping_add(self.pass());
     }
 
     /// 修改程序 break 位置（实现 sbrk 系统调用）

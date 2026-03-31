@@ -27,7 +27,13 @@ use crate::{
     build_flags, fs::Fd, map_portal, parse_flags, processor::ProcessorInner, Sv39, Sv39Manager,
     PROCESSOR,
 };
-use alloc::{alloc::alloc_zeroed, boxed::Box, sync::Arc, vec::Vec};
+use alloc::{
+    alloc::alloc_zeroed,
+    boxed::Box,
+    collections::BTreeMap,
+    sync::Arc,
+    vec::Vec,
+};
 use core::alloc::Layout;
 use spin::Mutex;
 use tg_kernel_context::{foreign::ForeignContext, LocalContext};
@@ -65,6 +71,257 @@ impl Thread {
     }
 }
 
+#[derive(Clone)]
+struct ThreadDeadlockState {
+    mutex_waiting: Option<usize>,
+    sem_waiting: Option<usize>,
+    sem_held: Vec<usize>,
+}
+
+/// 进程内死锁检测辅助状态
+pub(crate) struct DeadlockState {
+    enabled: bool,
+    mutex_owner: Vec<Option<ThreadId>>,
+    semaphore_total: Vec<usize>,
+    thread_state: BTreeMap<ThreadId, ThreadDeadlockState>,
+}
+
+impl DeadlockState {
+    /// 创建空的死锁检测状态
+    pub(crate) fn new() -> Self {
+        Self {
+            enabled: false,
+            mutex_owner: Vec::new(),
+            semaphore_total: Vec::new(),
+            thread_state: BTreeMap::new(),
+        }
+    }
+
+    #[inline]
+    pub(crate) fn set_enabled(&mut self, enabled: bool) {
+        self.enabled = enabled;
+    }
+
+    #[inline]
+    pub(crate) fn is_enabled(&self) -> bool {
+        self.enabled
+    }
+
+    pub(crate) fn register_mutex(&mut self, mutex_id: usize) {
+        if self.mutex_owner.len() <= mutex_id {
+            self.mutex_owner.resize(mutex_id + 1, None);
+        }
+        self.mutex_owner[mutex_id] = None;
+    }
+
+    pub(crate) fn register_semaphore(&mut self, sem_id: usize, total: usize) {
+        if self.semaphore_total.len() <= sem_id {
+            self.semaphore_total.resize(sem_id + 1, 0);
+        }
+        self.semaphore_total[sem_id] = total;
+        let sem_count = self.semaphore_total.len();
+        for state in self.thread_state.values_mut() {
+            state.sem_held.resize(sem_count, 0);
+        }
+    }
+
+    pub(crate) fn would_mutex_deadlock(&self, tid: ThreadId, mutex_id: usize) -> bool {
+        let Some(Some(mut owner_tid)) = self.mutex_owner.get(mutex_id).copied() else {
+            return false;
+        };
+        for _ in 0..=self.mutex_owner.len() {
+            if owner_tid == tid {
+                return true;
+            }
+            let Some(waiting_mutex) = self.thread_state.get(&owner_tid).and_then(|s| s.mutex_waiting)
+            else {
+                return false;
+            };
+            let Some(Some(next_owner)) = self.mutex_owner.get(waiting_mutex).copied() else {
+                return false;
+            };
+            owner_tid = next_owner;
+        }
+        false
+    }
+
+    pub(crate) fn note_mutex_acquired(&mut self, tid: ThreadId, mutex_id: usize) {
+        self.register_mutex(mutex_id);
+        self.ensure_thread_state(tid).mutex_waiting = None;
+        self.mutex_owner[mutex_id] = Some(tid);
+        self.prune_thread_state(tid);
+    }
+
+    pub(crate) fn note_mutex_blocked(&mut self, tid: ThreadId, mutex_id: usize) {
+        self.register_mutex(mutex_id);
+        self.ensure_thread_state(tid).mutex_waiting = Some(mutex_id);
+    }
+
+    pub(crate) fn note_mutex_released(&mut self, mutex_id: usize, waking_tid: Option<ThreadId>) {
+        if self.mutex_owner.len() <= mutex_id {
+            return;
+        }
+        let previous_owner = self.mutex_owner[mutex_id];
+        match waking_tid {
+            Some(tid) => {
+                self.ensure_thread_state(tid).mutex_waiting = None;
+                self.mutex_owner[mutex_id] = Some(tid);
+                self.prune_thread_state(tid);
+            }
+            None => self.mutex_owner[mutex_id] = None,
+        }
+        if let Some(previous_owner) = previous_owner {
+            self.prune_thread_state(previous_owner);
+        }
+    }
+
+    pub(crate) fn note_condvar_wait_result(
+        &mut self,
+        tid: ThreadId,
+        mutex_id: usize,
+        acquired: bool,
+        waking_tid: Option<ThreadId>,
+    ) {
+        self.note_mutex_released(mutex_id, waking_tid);
+        if acquired {
+            self.note_mutex_acquired(tid, mutex_id);
+        } else {
+            self.note_mutex_blocked(tid, mutex_id);
+        }
+    }
+
+    pub(crate) fn would_semaphore_deadlock(&self, tid: ThreadId, sem_id: usize) -> bool {
+        if sem_id >= self.semaphore_total.len() {
+            return false;
+        }
+        let mut work = self.semaphore_total.clone();
+        for state in self.thread_state.values() {
+            for (idx, held) in state.sem_held.iter().enumerate() {
+                if work[idx] < *held {
+                    return true;
+                }
+                work[idx] -= *held;
+            }
+        }
+        if work[sem_id] > 0 {
+            return false;
+        }
+
+        let mut states = self.thread_state.clone();
+        let sem_count = self.semaphore_total.len();
+        if let Some(state) = states.get_mut(&tid) {
+            state.sem_held.resize(sem_count, 0);
+            state.sem_waiting = Some(sem_id);
+        } else {
+            states.insert(
+                tid,
+                ThreadDeadlockState {
+                    mutex_waiting: None,
+                    sem_waiting: Some(sem_id),
+                    sem_held: vec![0; sem_count],
+                },
+            );
+        }
+
+        let mut finished: BTreeMap<ThreadId, bool> = BTreeMap::new();
+        loop {
+            let mut progressed = false;
+            let mut has_unfinished = false;
+            for (thread_id, state) in states.iter() {
+                if finished.get(thread_id).copied().unwrap_or(false) {
+                    continue;
+                }
+                has_unfinished = true;
+                let can_finish = match state.sem_waiting {
+                    Some(waiting_sem) => work.get(waiting_sem).copied().unwrap_or(0) > 0,
+                    None => true,
+                };
+                if can_finish {
+                    for (idx, held) in state.sem_held.iter().enumerate() {
+                        work[idx] += *held;
+                    }
+                    finished.insert(*thread_id, true);
+                    progressed = true;
+                }
+            }
+            if !has_unfinished {
+                return false;
+            }
+            if !progressed {
+                return true;
+            }
+        }
+    }
+
+    pub(crate) fn note_semaphore_acquired(&mut self, tid: ThreadId, sem_id: usize) {
+        if sem_id >= self.semaphore_total.len() {
+            return;
+        }
+        let state = self.ensure_thread_state(tid);
+        state.sem_waiting = None;
+        state.sem_held[sem_id] += 1;
+    }
+
+    pub(crate) fn note_semaphore_blocked(&mut self, tid: ThreadId, sem_id: usize) {
+        if sem_id >= self.semaphore_total.len() {
+            return;
+        }
+        self.ensure_thread_state(tid).sem_waiting = Some(sem_id);
+    }
+
+    pub(crate) fn note_semaphore_up(
+        &mut self,
+        tid: ThreadId,
+        sem_id: usize,
+        waking_tid: Option<ThreadId>,
+    ) {
+        if sem_id >= self.semaphore_total.len() {
+            return;
+        }
+        {
+            let state = self.ensure_thread_state(tid);
+            if state.sem_held[sem_id] > 0 {
+                state.sem_held[sem_id] -= 1;
+            }
+        }
+        self.prune_thread_state(tid);
+        if let Some(waking_tid) = waking_tid {
+            let waking = self.ensure_thread_state(waking_tid);
+            waking.sem_waiting = None;
+            waking.sem_held[sem_id] += 1;
+        }
+    }
+
+    pub(crate) fn note_thread_exit(&mut self, tid: ThreadId) {
+        if let Some(state) = self.thread_state.get_mut(&tid) {
+            state.mutex_waiting = None;
+            state.sem_waiting = None;
+        }
+        self.prune_thread_state(tid);
+    }
+
+    fn ensure_thread_state(&mut self, tid: ThreadId) -> &mut ThreadDeadlockState {
+        let sem_count = self.semaphore_total.len();
+        self.thread_state.entry(tid).or_insert_with(|| ThreadDeadlockState {
+            mutex_waiting: None,
+            sem_waiting: None,
+            sem_held: vec![0; sem_count],
+        })
+    }
+
+    fn prune_thread_state(&mut self, tid: ThreadId) {
+        let can_remove = self.thread_state.get(&tid).map(|state| {
+            state.mutex_waiting.is_none()
+                && state.sem_waiting.is_none()
+                && state.sem_held.iter().all(|held| *held == 0)
+                && !self.mutex_owner.iter().any(|owner| owner == &Some(tid))
+        }).unwrap_or(false);
+        if can_remove {
+            self.thread_state.remove(&tid);
+        }
+    }
+}
+
 /// 进程（资源容器）
 ///
 /// 管理地址空间、文件描述符、同步原语、信号等共享资源。
@@ -84,6 +341,8 @@ pub struct Process {
     pub mutex_list: Vec<Option<Arc<dyn MutexTrait>>>,
     /// 条件变量列表（**本章新增**，所有线程共享）
     pub condvar_list: Vec<Option<Arc<Condvar>>>,
+    /// 死锁检测辅助状态（**本章练习**）
+    pub(crate) deadlock: DeadlockState,
 }
 
 impl Process {
@@ -134,6 +393,7 @@ impl Process {
                 semaphore_list: Vec::new(),
                 mutex_list: Vec::new(),
                 condvar_list: Vec::new(),
+                deadlock: DeadlockState::new(),
             },
             thread,
         ))
@@ -206,6 +466,7 @@ impl Process {
                 semaphore_list: Vec::new(),
                 mutex_list: Vec::new(),
                 condvar_list: Vec::new(),
+                deadlock: DeadlockState::new(),
             },
             thread,
         ))

@@ -42,6 +42,17 @@ pub struct FileSystem {
     root: Inode,
 }
 
+impl FileSystem {
+    /// Return inode metadata needed by `fstat`.
+    pub fn stat(&self, inode: &Inode) -> (u64, bool, u32) {
+        (
+            inode.inode_id() as u64,
+            inode.is_dir(),
+            self.root.count_links(inode.inode_id()),
+        )
+    }
+}
+
 impl FSManager for FileSystem {
     /// 打开文件
     ///
@@ -83,13 +94,29 @@ impl FSManager for FileSystem {
     }
 
     /// 创建硬链接（TODO 练习题）
-    fn link(&self, _src: &str, _dst: &str) -> isize {
-        unimplemented!()
+    fn link(&self, src: &str, dst: &str) -> isize {
+        if src == dst {
+            return -1;
+        }
+        let Some(inode) = self.find(src) else {
+            return -1;
+        };
+        self.root.link(dst, inode.inode_id())
     }
 
     /// 删除硬链接（TODO 练习题）
-    fn unlink(&self, _path: &str) -> isize {
-        unimplemented!()
+    fn unlink(&self, path: &str) -> isize {
+        let Some(inode) = self.find(path) else {
+            return -1;
+        };
+        let Some(inode_id) = self.root.unlink(path) else {
+            return -1;
+        };
+        if self.root.count_links(inode_id) == 0 {
+            inode.clear();
+            inode.dealloc();
+        }
+        0
     }
 }
 

@@ -104,11 +104,19 @@ impl Manage<Process, ProcId> for ProcManager {
 impl Schedule<ProcId> for ProcManager {
     /// 将进程加入就绪队列尾部
     fn add(&mut self, id: ProcId) {
-        self.ready_queue.push_back(id);
+        if !self.ready_queue.iter().any(|queued| *queued == id) {
+            self.ready_queue.push_back(id);
+        }
     }
 
-    /// 从就绪队列头部取出下一个要执行的进程
+    /// 从就绪队列头部取出下一个要执行的进程。
     fn fetch(&mut self) -> Option<ProcId> {
-        self.ready_queue.pop_front()
+        while let Some(id) = self.ready_queue.pop_front() {
+            if let Some(task) = self.tasks.get_mut(&id) {
+                task.advance_stride();
+                return Some(id);
+            }
+        }
+        None
     }
 }

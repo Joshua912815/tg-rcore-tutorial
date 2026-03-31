@@ -241,21 +241,25 @@ extern "C" fn rust_main() -> ! {
     // 不断从进程管理器中取出就绪进程执行，直到所有进程结束
     loop {
         let processor: *mut PManager<Process, ProcManager> = PROCESSOR.get_mut() as *mut _;
-        if let Some(task) = unsafe { (*processor).find_next() } {
+        if unsafe { (*processor).find_next() }.is_some() {
             // 通过异界传送门切换到用户地址空间执行用户程序
-            unsafe { task.context.execute(portal, ()) };
+            unsafe { (*processor).current().unwrap().context.execute(portal, ()) };
 
             // ─── Trap 返回后处理 ───
             match scause::read().cause() {
                 // ─── 系统调用（ecall 指令触发） ───
                 scause::Trap::Exception(scause::Exception::UserEnvCall) => {
                     use tg_syscall::{SyscallId as Id, SyscallResult as Ret};
-                    let ctx = &mut task.context.context;
-                    // 将 sepc 向前移动 4 字节，使返回用户态时跳过 ecall 指令
-                    ctx.move_next();
-                    // 解析系统调用号和参数
-                    let id: Id = ctx.a(7).into();
-                    let args = [ctx.a(0), ctx.a(1), ctx.a(2), ctx.a(3), ctx.a(4), ctx.a(5)];
+                    let (id, args) = {
+                        let current = unsafe { (*processor).current().unwrap() };
+                        let ctx = &mut current.context.context;
+                        // 将 sepc 向前移动 4 字节，使返回用户态时跳过 ecall 指令
+                        ctx.move_next();
+                        // 解析系统调用号和参数
+                        let id: Id = ctx.a(7).into();
+                        let args = [ctx.a(0), ctx.a(1), ctx.a(2), ctx.a(3), ctx.a(4), ctx.a(5)];
+                        (id, args)
+                    };
                     // 分发并处理系统调用
                     match tg_syscall::handle(Caller { entity: 0, flow: 0 }, id, args) {
                         Ret::Done(ret) => match id {
@@ -263,7 +267,7 @@ extern "C" fn rust_main() -> ! {
                             Id::EXIT => unsafe { (*processor).make_current_exited(ret) },
                             _ => {
                                 // 其他系统调用：将返回值写入 a0 寄存器，暂停当前进程
-                                let ctx = &mut task.context.context;
+                                let ctx = &mut unsafe { (*processor).current().unwrap() }.context.context;
                                 *ctx.a_mut(0) = ret as _;
                                 unsafe { (*processor).make_current_suspend() };
                             }
@@ -368,7 +372,7 @@ mod impls {
         build_flags, process::Process as ProcStruct, processor::ProcManager, Sv39, APPS, PROCESSOR,
     };
     use alloc::alloc::alloc_zeroed;
-    use core::{alloc::Layout, ptr::NonNull};
+    use core::{alloc::Layout, ops::Range, ptr::NonNull};
     use tg_console::log;
     use tg_kernel_vm::{
         page_table::{MmuMeta, Pte, VAddr, VmFlags, PPN, VPN},
@@ -476,6 +480,60 @@ mod impls {
     /// 系统调用上下文，实现 IO、Process、Scheduling、Clock、Memory 等 trait
     pub struct SyscallContext;
 
+    impl SyscallContext {
+        const PAGE_SIZE: usize = 1 << Sv39::PAGE_BITS;
+        const USER_TOP: usize = 1 << 38;
+        const VALID: VmFlags<Sv39> = build_flags("__V");
+        const READABLE: VmFlags<Sv39> = build_flags("RV");
+        const WRITABLE: VmFlags<Sv39> = build_flags("W_V");
+
+        #[inline]
+        fn page_range(addr: usize, len: usize) -> Option<Range<VPN<Sv39>>> {
+            let start = VPN::new(addr >> Sv39::PAGE_BITS);
+            if len == 0 {
+                return Some(start..start);
+            }
+            let end = addr.checked_add(len)?;
+            Some(start..VAddr::<Sv39>::new(end).ceil())
+        }
+
+        #[inline]
+        fn is_page_aligned(addr: usize) -> bool {
+            addr & (Self::PAGE_SIZE - 1) == 0
+        }
+
+        #[inline]
+        fn is_user_range(addr: usize, len: usize) -> bool {
+            addr < Self::USER_TOP
+                && addr
+                    .checked_add(len)
+                    .is_some_and(|end| end <= Self::USER_TOP)
+        }
+
+        fn mmap_flags(prot: i32) -> Option<VmFlags<Sv39>> {
+            let prot = usize::try_from(prot).ok()?;
+            if prot & !0x7 != 0 || prot & 0x7 == 0 {
+                return None;
+            }
+            let mut flags = build_flags("U_V");
+            if prot & 0x1 != 0 {
+                flags |= build_flags("R");
+            }
+            if prot & 0x2 != 0 {
+                flags |= build_flags("W");
+            }
+            if prot & 0x4 != 0 {
+                flags |= build_flags("X");
+            }
+            Some(flags)
+        }
+
+        #[inline]
+        fn ranges_overlap(lhs: &Range<VPN<Sv39>>, rhs: &Range<VPN<Sv39>>) -> bool {
+            lhs.start < rhs.end && rhs.start < lhs.end
+        }
+    }
+
     /// IO 系统调用实现：write 和 read
     impl IO for SyscallContext {
         /// write 系统调用：将数据写入标准输出
@@ -485,13 +543,12 @@ mod impls {
         fn write(&self, _caller: Caller, fd: usize, buf: usize, count: usize) -> isize {
             match fd {
                 STDOUT | STDDEBUG => {
-                    const READABLE: VmFlags<Sv39> = build_flags("RV");
                     if let Some(ptr) = PROCESSOR
                         .get_mut()
                         .current()
                         .unwrap()
                         .address_space
-                        .translate::<u8>(VAddr::new(buf), READABLE)
+                        .translate::<u8>(VAddr::new(buf), Self::READABLE)
                     {
                         print!("{}", unsafe {
                             core::str::from_utf8_unchecked(core::slice::from_raw_parts(
@@ -519,13 +576,12 @@ mod impls {
         #[inline]
         fn read(&self, _caller: Caller, fd: usize, buf: usize, count: usize) -> isize {
             if fd == STDIN {
-                const WRITEABLE: VmFlags<Sv39> = build_flags("W_V");
                 if let Some(mut ptr) = PROCESSOR
                     .get_mut()
                     .current()
                     .unwrap()
                     .address_space
-                    .translate::<u8>(VAddr::new(buf), WRITEABLE)
+                    .translate::<u8>(VAddr::new(buf), Self::WRITABLE)
                 {
                     let mut ptr = unsafe { ptr.as_mut() } as *mut u8;
                     for _ in 0..count {
@@ -582,11 +638,10 @@ mod impls {
         /// 根据用户传入的程序名（需地址翻译），查找对应的 ELF 数据，
         /// 替换当前进程的地址空间。
         fn exec(&self, _caller: Caller, path: usize, count: usize) -> isize {
-            const READABLE: VmFlags<Sv39> = build_flags("RV");
             let current = PROCESSOR.get_mut().current().unwrap();
             current
                 .address_space
-                .translate::<u8>(VAddr::new(path), READABLE)
+                .translate::<u8>(VAddr::new(path), Self::READABLE)
                 .map(|ptr| unsafe {
                     core::str::from_utf8_unchecked(core::slice::from_raw_parts(ptr.as_ptr(), count))
                 })
@@ -642,15 +697,35 @@ mod impls {
         ///
         /// 与 fork+exec 不同，spawn 直接从 ELF 创建新进程，
         /// 无需复制父进程地址空间。
-        ///
-        /// TODO: 实现 spawn 系统调用（练习题）
-        fn spawn(&self, _caller: Caller, _path: usize, _count: usize) -> isize {
-            let current = PROCESSOR.get_mut().current().unwrap();
-            tg_console::log::info!(
-                "spawn: parent pid = {}, not implemented",
-                current.pid.get_usize()
-            );
-            -1
+        fn spawn(&self, _caller: Caller, path: usize, count: usize) -> isize {
+            let (parent_pid, app_data) = {
+                let current = PROCESSOR.get_mut().current().unwrap();
+                let parent_pid = current.pid;
+                let app_data = current
+                    .address_space
+                    .translate::<u8>(VAddr::new(path), Self::READABLE)
+                    .map(|ptr| unsafe {
+                        core::str::from_utf8_unchecked(core::slice::from_raw_parts(
+                            ptr.as_ptr(),
+                            count,
+                        ))
+                    })
+                    .and_then(|name| APPS.get(name).copied());
+                (parent_pid, app_data)
+            };
+
+            let Some(input) = app_data else {
+                log::error!("unknown app, select one in the list: ");
+                APPS.keys().for_each(|app| println!("{app}"));
+                println!();
+                return -1;
+            };
+            let Some(child_proc) = ElfFile::new(input).ok().and_then(ProcStruct::from_elf) else {
+                return -1;
+            };
+            let pid = child_proc.pid;
+            PROCESSOR.get_mut().add(pid, child_proc, parent_pid);
+            pid.get_usize() as isize
         }
 
         /// sbrk 系统调用：调整进程堆空间大小
@@ -678,15 +753,16 @@ mod impls {
 
         /// set_priority 系统调用：设置当前进程优先级
         ///
-        /// TODO: 实现 set_priority 系统调用（练习题：stride 调度算法）
         fn set_priority(&self, _caller: Caller, prio: isize) -> isize {
             let current = PROCESSOR.get_mut().current().unwrap();
-            tg_console::log::info!(
-                "set_priority: pid = {}, prio = {}, not implemented",
-                current.pid.get_usize(),
-                prio
-            );
-            -1
+            let Ok(priority) = usize::try_from(prio) else {
+                return -1;
+            };
+            if priority < 2 {
+                return -1;
+            }
+            current.set_priority(priority);
+            prio
         }
     }
 
@@ -698,7 +774,6 @@ mod impls {
         /// 通过地址翻译写入用户空间的 TimeSpec 结构。
         #[inline]
         fn clock_gettime(&self, _caller: Caller, clock_id: ClockId, tp: usize) -> isize {
-            const WRITABLE: VmFlags<Sv39> = build_flags("W_V");
             match clock_id {
                 ClockId::CLOCK_MONOTONIC => {
                     if let Some(mut ptr) = PROCESSOR
@@ -706,7 +781,7 @@ mod impls {
                         .current()
                         .unwrap()
                         .address_space
-                        .translate::<TimeSpec>(VAddr::new(tp), WRITABLE)
+                        .translate::<TimeSpec>(VAddr::new(tp), Self::WRITABLE)
                     {
                         let time = riscv::register::time::read() * 10000 / 125;
                         *unsafe { ptr.as_mut() } = TimeSpec {
@@ -728,7 +803,6 @@ mod impls {
     impl Memory for SyscallContext {
         /// mmap 系统调用：映射匿名内存
         ///
-        /// TODO: 实现 mmap 系统调用（练习题）
         fn mmap(
             &self,
             _caller: Caller,
@@ -739,18 +813,59 @@ mod impls {
             _fd: i32,
             _offset: usize,
         ) -> isize {
-            tg_console::log::info!(
-                "mmap: addr = {addr:#x}, len = {len}, prot = {prot}, not implemented"
-            );
-            -1
+            if !Self::is_page_aligned(addr) || !Self::is_user_range(addr, len) {
+                return -1;
+            }
+            let Some(flags) = Self::mmap_flags(prot) else {
+                return -1;
+            };
+            let Some(range) = Self::page_range(addr, len) else {
+                return -1;
+            };
+            if range.is_empty() {
+                return 0;
+            }
+
+            let current = PROCESSOR.get_mut().current().unwrap();
+            if current
+                .address_space
+                .areas
+                .iter()
+                .any(|area| Self::ranges_overlap(area, &range))
+            {
+                return -1;
+            }
+
+            current.address_space.map(range, &[], 0, flags);
+            0
         }
 
-        /// munmap 系统调用：取消内存映射
-        ///
-        /// TODO: 实现 munmap 系统调用（练习题）
         fn munmap(&self, _caller: Caller, addr: usize, len: usize) -> isize {
-            tg_console::log::info!("munmap: addr = {addr:#x}, len = {len}, not implemented");
-            -1
+            if !Self::is_page_aligned(addr) || !Self::is_user_range(addr, len) {
+                return -1;
+            }
+            let Some(range) = Self::page_range(addr, len) else {
+                return -1;
+            };
+            if range.is_empty() {
+                return 0;
+            }
+
+            let current = PROCESSOR.get_mut().current().unwrap();
+            let mut vpn = range.start;
+            while vpn < range.end {
+                if current
+                    .address_space
+                    .translate::<u8>(vpn.base(), Self::VALID)
+                    .is_none()
+                {
+                    return -1;
+                }
+                vpn = vpn + 1;
+            }
+
+            current.address_space.unmap(range);
+            0
         }
     }
 }

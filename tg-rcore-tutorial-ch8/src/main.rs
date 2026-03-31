@@ -223,6 +223,7 @@ extern "C" fn rust_main() -> ! {
                 // ─── 系统调用 ───
                 scause::Trap::Exception(scause::Exception::UserEnvCall) => {
                     use tg_syscall::{SyscallId as Id, SyscallResult as Ret};
+                    let current_tid = task.tid;
                     let ctx = &mut task.context.context;
                     ctx.move_next();
                     let id: Id = ctx.a(7).into();
@@ -232,12 +233,16 @@ extern "C" fn rust_main() -> ! {
                     // ─── 信号处理 ───
                     let current_proc = unsafe { (*processor).get_current_proc().unwrap() };
                     match current_proc.signal.handle_signals(ctx) {
-                        SignalResult::ProcessKilled(exit_code) => unsafe {
-                            (*processor).make_current_exited(exit_code as _)
-                        },
+                        SignalResult::ProcessKilled(exit_code) => {
+                            current_proc.deadlock.note_thread_exit(current_tid);
+                            unsafe { (*processor).make_current_exited(exit_code as _) }
+                        }
                         _ => match syscall_ret {
                             Ret::Done(ret) => match id {
-                                Id::EXIT => unsafe { (*processor).make_current_exited(ret) },
+                                Id::EXIT => {
+                                    current_proc.deadlock.note_thread_exit(current_tid);
+                                    unsafe { (*processor).make_current_exited(ret) }
+                                }
                                 // ─── 本章新增：同步原语阻塞处理 ───
                                 // 当 semaphore_down / mutex_lock / condvar_wait 返回 -1 时，
                                 // 表示资源不可用，将当前线程标记为阻塞态
@@ -367,6 +372,8 @@ mod impls {
     use tg_syscall::*;
     use tg_task_manage::{ProcId, ThreadId};
     use xmas_elf::ElfFile;
+
+    const DEADLOCK_DETECTED: isize = -0xdead;
 
     // ─── Sv39 页表管理器 ───
 
@@ -729,15 +736,19 @@ mod impls {
                 current_proc.semaphore_list.push(Some(Arc::new(Semaphore::new(res_count))));
                 current_proc.semaphore_list.len() - 1
             };
+            current_proc.deadlock.register_semaphore(id, res_count);
             id as isize
         }
 
         /// V 操作：释放信号量，唤醒等待线程
         fn semaphore_up(&self, _caller: Caller, sem_id: usize) -> isize {
             let processor: *mut ProcessorInner = PROCESSOR.get_mut() as *mut ProcessorInner;
+            let current_tid = unsafe { (*processor).current().unwrap().tid };
             let current_proc = unsafe { (*processor).get_current_proc().unwrap() };
             let sem = Arc::clone(current_proc.semaphore_list[sem_id].as_ref().unwrap());
-            if let Some(tid) = sem.up() {
+            let waking_tid = sem.up();
+            current_proc.deadlock.note_semaphore_up(current_tid, sem_id, waking_tid);
+            if let Some(tid) = waking_tid {
                 unsafe { (*processor).re_enque(tid); }
             }
             0
@@ -749,8 +760,19 @@ mod impls {
             let current = unsafe { (*processor).current().unwrap() };
             let tid = current.tid;
             let current_proc = unsafe { (*processor).get_current_proc().unwrap() };
+            if current_proc.deadlock.is_enabled()
+                && current_proc.deadlock.would_semaphore_deadlock(tid, sem_id)
+            {
+                return DEADLOCK_DETECTED;
+            }
             let sem = Arc::clone(current_proc.semaphore_list[sem_id].as_ref().unwrap());
-            if !sem.down(tid) { -1 } else { 0 }
+            if !sem.down(tid) {
+                current_proc.deadlock.note_semaphore_blocked(tid, sem_id);
+                -1
+            } else {
+                current_proc.deadlock.note_semaphore_acquired(tid, sem_id);
+                0
+            }
         }
 
         /// 创建互斥锁（blocking=true 为阻塞锁）
@@ -763,10 +785,13 @@ mod impls {
                 .find(|(_, item)| item.is_none()).map(|(id, _)| id)
             {
                 current_proc.mutex_list[id] = new_mutex;
+                current_proc.deadlock.register_mutex(id);
                 id as isize
             } else {
                 current_proc.mutex_list.push(new_mutex);
-                current_proc.mutex_list.len() as isize - 1
+                let id = current_proc.mutex_list.len() - 1;
+                current_proc.deadlock.register_mutex(id);
+                id as isize
             }
         }
 
@@ -775,7 +800,9 @@ mod impls {
             let processor: *mut ProcessorInner = PROCESSOR.get_mut() as *mut ProcessorInner;
             let current_proc = unsafe { (*processor).get_current_proc().unwrap() };
             let mutex = Arc::clone(current_proc.mutex_list[mutex_id].as_ref().unwrap());
-            if let Some(tid) = mutex.unlock() {
+            let waking_tid = mutex.unlock();
+            current_proc.deadlock.note_mutex_released(mutex_id, waking_tid);
+            if let Some(tid) = waking_tid {
                 unsafe { (*processor).re_enque(tid); }
             }
             0
@@ -787,8 +814,19 @@ mod impls {
             let current = unsafe { (*processor).current().unwrap() };
             let tid = current.tid;
             let current_proc = unsafe { (*processor).get_current_proc().unwrap() };
+            if current_proc.deadlock.is_enabled()
+                && current_proc.deadlock.would_mutex_deadlock(tid, mutex_id)
+            {
+                return DEADLOCK_DETECTED;
+            }
             let mutex = Arc::clone(current_proc.mutex_list[mutex_id].as_ref().unwrap());
-            if !mutex.lock(tid) { -1 } else { 0 }
+            if !mutex.lock(tid) {
+                current_proc.deadlock.note_mutex_blocked(tid, mutex_id);
+                -1
+            } else {
+                current_proc.deadlock.note_mutex_acquired(tid, mutex_id);
+                0
+            }
         }
 
         /// 创建条件变量
@@ -826,6 +864,9 @@ mod impls {
             let condvar = Arc::clone(current_proc.condvar_list[condvar_id].as_ref().unwrap());
             let mutex = Arc::clone(current_proc.mutex_list[mutex_id].as_ref().unwrap());
             let (flag, waking_tid) = condvar.wait_with_mutex(tid, mutex);
+            current_proc
+                .deadlock
+                .note_condvar_wait_result(tid, mutex_id, flag, waking_tid);
             if let Some(waking_tid) = waking_tid {
                 unsafe { (*processor).re_enque(waking_tid); }
             }
@@ -834,8 +875,25 @@ mod impls {
 
         /// 死锁检测（TODO 练习题）
         fn enable_deadlock_detect(&self, _caller: Caller, is_enable: i32) -> isize {
-            tg_console::log::info!("enable_deadlock_detect: is_enable = {is_enable}, not implemented");
-            -1
+            match is_enable {
+                0 => {
+                    PROCESSOR.get_mut()
+                        .get_current_proc()
+                        .unwrap()
+                        .deadlock
+                        .set_enabled(false);
+                    0
+                }
+                1 => {
+                    PROCESSOR.get_mut()
+                        .get_current_proc()
+                        .unwrap()
+                        .deadlock
+                        .set_enabled(true);
+                    0
+                }
+                _ => -1,
+            }
         }
     }
 }

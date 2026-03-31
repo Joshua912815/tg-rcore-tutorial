@@ -77,10 +77,18 @@ impl Manage<Process, ProcId> for ProcManager {
 impl Schedule<ProcId> for ProcManager {
     /// 加入就绪队列尾部
     fn add(&mut self, id: ProcId) {
-        self.ready_queue.push_back(id);
+        if !self.ready_queue.iter().any(|queued| *queued == id) {
+            self.ready_queue.push_back(id);
+        }
     }
     /// 从就绪队列头部取出
     fn fetch(&mut self) -> Option<ProcId> {
-        self.ready_queue.pop_front()
+        while let Some(id) = self.ready_queue.pop_front() {
+            if let Some(task) = self.tasks.get_mut(&id) {
+                task.advance_stride();
+                return Some(id);
+            }
+        }
+        None
     }
 }
