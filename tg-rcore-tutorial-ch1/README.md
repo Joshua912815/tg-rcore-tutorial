@@ -1,13 +1,14 @@
 # 第一章：应用程序与基本执行环境
 
-本章实现了一个最简单的 RISC-V S 态裸机程序（tg-rcore-tutorial-ch1），展示操作系统的最小执行环境。程序在 QEMU 模拟的 RISC-V 64 硬件上运行，不依赖 OpenSBI 或 RustSBI，通过 `-bios none` 模式直接启动，打印 `Hello, world!` 后关机。
+本章实现了一个最简单的 RISC-V S 态裸机图形程序（tg-rcore-tutorial-ch1），展示操作系统的最小执行环境如何继续扩展到图形输出。程序在 QEMU 模拟的 RISC-V 64 硬件上运行，不依赖 OpenSBI 或 RustSBI，通过 `-bios none` 模式直接启动，初始化 VirtIO-GPU，借助 framebuffer 静态显示七巧板 “OS” 图案，并通过串口按键 `q` 退出。
 
 通过本章的学习和实践，你将理解：
 
-- 应用程序的执行环境是什么，为什么 `Hello, world!` 并不简单
+- 应用程序的执行环境是什么，为什么“显示一张图”并不简单
 - 如何让 Rust 程序脱离标准库，在裸机上运行
 - RISC-V 的启动流程和特权级机制
 - SBI 的作用以及操作系统如何与硬件交互
+- VirtIO-GPU 与 framebuffer 的最小驱动路径
 
 ## 练习任务（以教代学，学以致用）：
 
@@ -27,7 +28,9 @@ tg-rcore-tutorial-ch1/
 ├── Cargo.toml          # 项目配置与依赖
 ├── README.md           # 本文档
 └── src/
-    └── main.rs         # 程序源码：入口、主函数、panic 处理
+    ├── framebuffer.rs  # 像素绘制：清屏、多边形填充、像素写入
+    ├── tangram.rs      # 七巧板 “OS” 场景数据
+    └── main.rs         # 程序入口、VirtIO-GPU 初始化、退出控制
 ```
 
 <a id="source-nav"></a>
@@ -36,30 +39,33 @@ tg-rcore-tutorial-ch1/
 
 [返回根文档导航总表](../README.md#chapters-source-nav-map)
 
-建议把本章源码阅读聚焦在一个文件：`src/main.rs`。
+建议按 “启动 -> 设备初始化 -> 图形渲染” 的顺序阅读。
 
 | 阅读顺序 | 位置 | 重点问题 |
 |---|---|---|
-| 1 | `_start` | 为什么裸机入口要手动设栈，且不能依赖标准运行时？ |
-| 2 | `rust_main` | 最小执行环境中，`console_putchar` 和 `shutdown` 如何构成完整闭环？ |
-| 3 | `panic_handler` | `#![no_std]` 下发生异常时，系统如何收口与退出？ |
+| 1 | `src/main.rs::_start` | 为什么裸机入口要手动设栈，且不能依赖标准运行时？ |
+| 2 | `src/main.rs::rust_main` | 在没有内核堆管理/分页的前提下，如何初始化 VirtIO-GPU？ |
+| 3 | `src/framebuffer.rs` | 多边形如何被离散化为 framebuffer 像素？ |
+| 4 | `src/tangram.rs` | 七巧板 “OS” 图案如何用数组描述并缩放到实际分辨率？ |
 
-配套建议：阅读 `tg-rcore-tutorial-sbi/src/lib.rs` 中的 SBI 调用封装，理解 `console_putchar`/`shutdown` 的底层调用路径。
+配套建议：阅读 `tg-rcore-tutorial-sbi/src/lib.rs` 中的 SBI 调用封装，理解 `console_putchar`/`console_getchar`/`shutdown` 的底层调用路径。
 
 ## DoD 验收标准（本章完成判据）
 
-- [ ] 能在 `tg-rcore-tutorial-ch1` 目录执行 `cargo run`，看到 `Hello, world!` 并正常关机退出
+- [ ] 能在 `tg-rcore-tutorial-ch1` 目录执行 `cargo run`，看到 QEMU 图形窗口中的七巧板 “OS” 图案
+- [ ] 能解释 VirtIO-GPU 初始化、framebuffer 建立与 `q` 键退出流程
 - [ ] 能解释 `#![no_std]` 与 `#![no_main]` 在裸机实验中的必要性
 - [ ] 能从 `src/main.rs` 说明 `_start -> rust_main -> panic_handler` 的控制流
-- [ ] 能说明 `tg-rcore-tutorial-sbi` 在本章承担的最小职责（输出字符与关机）
+- [ ] 能说明 `tg-rcore-tutorial-sbi` 在本章承担的最小职责（串口输入输出与关机）
 
 ## 概念-源码-测试三联表
 
 | 核心概念 | 源码入口 | 自测方式（命令/现象） |
 |---|---|---|
-| 裸机入口与手动设栈 | `tg-rcore-tutorial-ch1/src/main.rs` 的 `_start` | `cargo run` 可启动且无运行时依赖报错 |
-| SBI 最小服务调用 | `tg-rcore-tutorial-ch1/src/main.rs` 的 `rust_main`；`tg-rcore-tutorial-sbi/src/lib.rs` | 看到串口输出后正常关机 |
-| 无标准库异常处理 | `tg-rcore-tutorial-ch1/src/main.rs` 的 `panic_handler` | 人为触发 panic 时可打印信息并异常关机 |
+| 裸机入口与手动设栈 | `tg-rcore-tutorial-ch1/src/main.rs` 的 `_start` | `cargo run` 可启动且图形窗口正常弹出 |
+| VirtIO-GPU 初始化 | `tg-rcore-tutorial-ch1/src/main.rs` 的 `rust_main` | 串口输出分辨率信息，例如 `VirtIO-GPU ready at 1280x800.` |
+| framebuffer 光栅化 | `tg-rcore-tutorial-ch1/src/framebuffer.rs`；`tg-rcore-tutorial-ch1/src/tangram.rs` | 屏幕显示七巧板 “OS” 图案 |
+| 无标准库异常处理 | `tg-rcore-tutorial-ch1/src/main.rs` 的 `panic_handler` | 人为触发 panic 时串口打印错误并异常关机 |
 
 遇到构建/运行异常可先查看根文档的“高频错误速查表”。
 
@@ -170,7 +176,9 @@ cargo run
 ```bash
 qemu-system-riscv64 \
     -machine virt \
-    -nographic \
+    -serial stdio \
+    -monitor none \
+    -device virtio-gpu-device,bus=virtio-mmio-bus.0 \
     -bios none \
     -kernel target/riscv64gc-unknown-none-elf/debug/tg-rcore-tutorial-ch1
 ```
@@ -180,17 +188,23 @@ qemu-system-riscv64 \
 | 参数 | 说明 |
 |------|------|
 | `-machine virt` | 使用 QEMU 的 `virt` 虚拟平台，这是一个通用的 RISC-V 虚拟机 |
-| `-nographic` | 无图形界面，所有输出通过串口重定向到终端 |
+| `-serial stdio` | 将串口输入输出绑定到当前终端，便于查看日志并输入 `q` 退出 |
+| `-monitor none` | 关闭 QEMU monitor，避免占用标准输入输出 |
+| `-device virtio-gpu-device,bus=virtio-mmio-bus.0` | 在第一个 virtio-mmio 总线上挂载 VirtIO-GPU 设备 |
 | `-bios none` | 不加载任何 BIOS/SBI 固件，tg-rcore-tutorial-ch1 自带 M-mode 启动代码 |
 | `-kernel <文件>` | 将 ELF 可执行文件加载到内存中作为内核启动 |
 
 ### 2.3 预期输出
 
-```
-Hello, world!
+串口会输出类似：
+
+```text
+Booting ch1 tangram...
+VirtIO-GPU ready at 1280x800.
+Tangram rendered. Press q to quit.
 ```
 
-输出一行 `Hello, world!` 后，QEMU 自动退出。这是因为程序通过 SBI 调用执行了关机操作。
+同时 QEMU 会弹出图形窗口，显示静态七巧板 “OS” 图案。按终端中的 `q` 或 `Q` 后，程序调用 SBI 正常关机退出。
 
 ---
 
