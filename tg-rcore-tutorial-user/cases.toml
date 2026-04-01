@@ -180,6 +180,33 @@ cases = [
     "ch3_trace",
 ]
 
+[ch3_observe]
+base = 0x8040_0000
+step = 0x0020_0000
+cases = [
+    "00hello_world",
+    "11sleep",
+    "01store_fault",
+    "t21_ch3_normal",
+    "t21_ch3_breakpoint",
+]
+
+[ch3_observe_exercise]
+base = 0x8040_0000
+step = 0x0020_0000
+cases = [
+    "ch3_trace",
+    "t21_ch3_normal",
+    "t21_ch3_breakpoint",
+]
+
+[ch3_observe_crash]
+base = 0x8040_0000
+step = 0x0020_0000
+cases = [
+    "t21_ch3_crash",
+]
+
 [ch4_exercise]
 cases = [
     "ch3_sleep",
