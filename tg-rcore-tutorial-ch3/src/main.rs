@@ -106,6 +106,11 @@ extern "C" fn rust_main() -> ! {
     // 第四步：初始化任务控制块数组，加载所有用户程序
     let mut tcbs = [TaskControlBlock::ZERO; APP_CAPACITY];
     let mut index_mod = 0;
+    let mut timer_events = 0usize;
+    let mut syscall_events = 0usize;
+    let mut yield_events = 0usize;
+    let mut exit_events = 0usize;
+    let mut killed_events = 0usize;
     for (i, app) in tg_linker::AppMeta::locate().iter().enumerate() {
         let entry = app.as_ptr() as usize;
         log::info!("load app{i} to {entry:#x}");
@@ -145,27 +150,39 @@ extern "C" fn rust_main() -> ! {
                     Trap::Interrupt(Interrupt::SupervisorTimer) => {
                         // 清除时钟中断（设置为最大值，避免立即再次触发）
                         tg_sbi::set_timer(u64::MAX);
+                        timer_events += 1;
+                        event!("ch3", "schedule", "task={i} timer-expired");
                         log::trace!("app{i} timeout");
                         false // 不结束任务，切换到下一个
                     }
                     // ─── 系统调用：用户程序执行了 ecall 指令 ───
                     Trap::Exception(Exception::UserEnvCall) => {
                         use task::SchedulingEvent as Event;
+                        syscall_events += 1;
                         match tcb.handle_syscall() {
                             // 普通系统调用（如 write）：处理完成后继续运行当前任务
-                            Event::None => continue,
+                            Event::None => {
+                                event!("ch3", "syscall", "task={i} handled");
+                                continue;
+                            }
                             // exit 系统调用：任务主动退出
                             Event::Exit(code) => {
+                                exit_events += 1;
+                                event!("ch3", "syscall", "task={i} exit code={code}");
                                 log::info!("app{i} exit with code {code}");
                                 true
                             }
                             // yield 系统调用：任务主动让出 CPU
                             Event::Yield => {
+                                yield_events += 1;
+                                event!("ch3", "schedule", "task={i} yield");
                                 log::debug!("app{i} yield");
                                 false // 不结束任务，切换到下一个
                             }
                             // 不支持的系统调用：杀死任务
                             Event::UnsupportedSyscall(id) => {
+                                killed_events += 1;
+                                event!("ch3", "trap", "task={i} unsupported-syscall={}", id.0);
                                 log::error!("app{i} call an unsupported syscall {}", id.0);
                                 true
                             }
@@ -173,11 +190,15 @@ extern "C" fn rust_main() -> ! {
                     }
                     // ─── 其他异常（如非法指令、页错误等）：杀死应用 ───
                     Trap::Exception(e) => {
+                        killed_events += 1;
+                        event!("ch3", "trap", "task={i} exception={e:?}");
                         log::error!("app{i} was killed by {e:?}");
                         true
                     }
                     // ─── 未预期的中断：杀死应用 ───
                     Trap::Interrupt(ir) => {
+                        killed_events += 1;
+                        event!("ch3", "trap", "task={i} interrupt={ir:?}");
                         log::error!("app{i} was killed by an unexpected interrupt {ir:?}");
                         true
                     }
@@ -194,6 +215,12 @@ extern "C" fn rust_main() -> ! {
         // 轮转到下一个任务（循环取模）
         i = (i + 1) % index_mod;
     }
+
+    metric!("ch3", "timer_events", "{timer_events}");
+    metric!("ch3", "syscall_events", "{syscall_events}");
+    metric!("ch3", "yield_events", "{yield_events}");
+    metric!("ch3", "exit_events", "{exit_events}");
+    metric!("ch3", "killed_events", "{killed_events}");
 
     // 所有用户程序执行完毕，关机
     tg_sbi::shutdown(false)
@@ -276,12 +303,7 @@ mod impls {
     /// QEMU virt 平台的时钟频率为 12.5 MHz（10000/125 = 80 ns/tick）。
     impl Clock for SyscallContext {
         #[inline]
-        fn clock_gettime(
-            &self,
-            _caller: Caller,
-            clock_id: ClockId,
-            tp: usize,
-        ) -> isize {
+        fn clock_gettime(&self, _caller: Caller, clock_id: ClockId, tp: usize) -> isize {
             match clock_id {
                 ClockId::CLOCK_MONOTONIC => {
                     // 将 RISC-V time 寄存器的值转换为纳秒
@@ -306,13 +328,7 @@ mod impls {
     /// - 查询系统调用计数（trace_request=2）
     impl Trace for SyscallContext {
         #[inline]
-        fn trace(
-            &self,
-            _caller: Caller,
-            trace_request: usize,
-            id: usize,
-            data: usize,
-        ) -> isize {
+        fn trace(&self, _caller: Caller, trace_request: usize, id: usize, data: usize) -> isize {
             match trace_request {
                 0 => unsafe { (id as *const u8).read_volatile() as isize },
                 1 => {

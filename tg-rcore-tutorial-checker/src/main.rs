@@ -34,7 +34,10 @@ fn main() -> ExitCode {
         println!("Available tests:");
         for (ch, exercise, desc) in cases::list_available_tests() {
             let mode = if exercise { "--exercise" } else { "" };
-            println!("  tg-rcore-tutorial-checker --ch {} {:<12} # {}", ch, mode, desc);
+            println!(
+                "  tg-rcore-tutorial-checker --ch {} {:<12} # {}",
+                ch, mode, desc
+            );
         }
         return ExitCode::SUCCESS;
     }

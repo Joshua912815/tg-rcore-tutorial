@@ -11,6 +11,9 @@ pub struct CheckResult {
     pub passed: usize,
     pub total: usize,
     pub details: Vec<CheckDetail>,
+    pub missing_expected: usize,
+    pub unexpected_found: usize,
+    pub empty_output: bool,
 }
 
 /// 单个检测项的详情
@@ -33,6 +36,8 @@ pub fn check(output: &str, test_case: &TestCase) -> CheckResult {
     let mut details = Vec::new();
     let mut passed = 0;
     let total = test_case.expected.len() + test_case.not_expected.len();
+    let mut missing_expected = 0;
+    let mut unexpected_found = 0;
 
     // 先检查“必须出现”的模式
     for pattern in &test_case.expected {
@@ -40,6 +45,8 @@ pub fn check(output: &str, test_case: &TestCase) -> CheckResult {
         let found = re.is_match(output);
         if found {
             passed += 1;
+        } else {
+            missing_expected += 1;
         }
         details.push(CheckDetail {
             pattern: pattern.to_string(),
@@ -55,6 +62,8 @@ pub fn check(output: &str, test_case: &TestCase) -> CheckResult {
         let check_passed = !found;
         if check_passed {
             passed += 1;
+        } else {
+            unexpected_found += 1;
         }
         details.push(CheckDetail {
             pattern: pattern.to_string(),
@@ -67,6 +76,9 @@ pub fn check(output: &str, test_case: &TestCase) -> CheckResult {
         passed,
         total,
         details,
+        missing_expected,
+        unexpected_found,
+        empty_output: output.trim().is_empty(),
     }
 }
 
@@ -97,6 +109,30 @@ pub fn print_result(result: &CheckResult, verbose: bool) {
     } else {
         "FAILED".red().bold()
     };
+
+    if !result.is_success() {
+        if result.empty_output {
+            println!(
+                "{} output was empty; check build, qemu startup, or early panic",
+                "[HINT]".yellow()
+            );
+        }
+        if result.missing_expected > 0 {
+            println!(
+                "{} missing expected patterns: {}",
+                "[HINT]".yellow(),
+                result.missing_expected
+            );
+        }
+        if result.unexpected_found > 0 {
+            println!(
+                "{} forbidden patterns found: {}",
+                "[HINT]".yellow(),
+                result.unexpected_found
+            );
+        }
+        println!();
+    }
 
     println!("Test {}: {}/{}", status, result.passed, result.total);
 }

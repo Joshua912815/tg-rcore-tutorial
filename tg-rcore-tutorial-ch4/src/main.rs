@@ -229,6 +229,9 @@ extern "C" fn schedule() -> ! {
     tg_syscall::init_clock(&SyscallContext);
     tg_syscall::init_trace(&SyscallContext);
     tg_syscall::init_memory(&SyscallContext);
+    let mut syscall_events = 0usize;
+    let mut vm_fault_events = 0usize;
+    let mut killed_processes = 0usize;
 
     // 调度循环：持续执行直到所有进程完成
     while !unsafe { PROCESSES.get_mut().is_empty() } {
@@ -250,10 +253,13 @@ extern "C" fn schedule() -> ! {
                 let id: Id = ctx.a(7).into();
                 let args = [ctx.a(0), ctx.a(1), ctx.a(2), ctx.a(3), ctx.a(4), ctx.a(5)];
                 (unsafe { PROCESSES.get_mut() })[0].record_syscall(id.0);
+                syscall_events += 1;
+                event!("ch4", "syscall", "proc=head id={}", id.0);
                 match tg_syscall::handle(Caller { entity: 0, flow: 0 }, id, args) {
                     Ret::Done(ret) => match id {
                         // exit：移除进程
                         Id::EXIT => unsafe {
+                            event!("ch4", "schedule", "proc=head exit");
                             PROCESSES.get_mut().remove(0);
                         },
                         // 其他系统调用：写回返回值，sepc += 4
@@ -265,12 +271,43 @@ extern "C" fn schedule() -> ! {
                     // 不支持的系统调用：杀死进程
                     Ret::Unsupported(_) => {
                         log::info!("id = {id:?}");
+                        killed_processes += 1;
+                        event!("ch4", "trap", "proc=head unsupported-syscall={}", id.0);
                         unsafe { PROCESSES.get_mut().remove(0) };
                     }
                 }
             }
             // ─── 其他异常/中断：杀死进程 ───
             e => {
+                if matches!(
+                    e,
+                    scause::Trap::Exception(
+                        scause::Exception::InstructionPageFault
+                            | scause::Exception::LoadPageFault
+                            | scause::Exception::StorePageFault
+                            | scause::Exception::InstructionFault
+                            | scause::Exception::LoadFault
+                            | scause::Exception::StoreFault
+                    )
+                ) {
+                    vm_fault_events += 1;
+                    event!(
+                        "ch4",
+                        "vm",
+                        "proc=head trap={e:?} stval={:#x} sepc={:#x}",
+                        stval::read(),
+                        ctx.context.pc()
+                    );
+                } else {
+                    event!(
+                        "ch4",
+                        "trap",
+                        "proc=head trap={e:?} stval={:#x} sepc={:#x}",
+                        stval::read(),
+                        ctx.context.pc()
+                    );
+                }
+                killed_processes += 1;
                 log::error!(
                     "unsupported trap: {e:?}, stval = {:#x}, sepc = {:#x}",
                     stval::read(),
@@ -280,6 +317,9 @@ extern "C" fn schedule() -> ! {
             }
         }
     }
+    metric!("ch4", "syscall_events", "{syscall_events}");
+    metric!("ch4", "vm_fault_events", "{vm_fault_events}");
+    metric!("ch4", "killed_processes", "{killed_processes}");
     // 所有进程执行完毕，关机
     tg_sbi::shutdown(false)
 }

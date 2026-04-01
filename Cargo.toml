@@ -1,21 +1,23 @@
 [package]
-name = "tg-rcore-tutorial"
-version = "0.4.8"
+name = "joshua912815-tg-rcore-tutorial-t2l8"
+version = "0.8.0-preview.1"
 edition = "2024"
-authors = ["YdrMaster <ydrml@hotmail.com>", "Yifan Wang <w-yf22@mails.tsinghua.edu.cn>", "Yu Chen <yuchen@tsinghua.edu.cn>"]
-description = "Meta crate bundle for rCore Tutorial workspace - contains all chapters and components"
-keywords = ["rcore", "os", "riscv", "tutorial", "no-std"]
+authors = ["Joshua <Joshua912815@users.noreply.github.com>"]
+description = "T2L8 engineering-quality rCore tutorial bundle with unified tracing, workloads, regression scripts, and learning docs"
+keywords = ["ai", "ai4ose", "kernel", "learning", "os"]
 categories = ["no-std", "embedded"]
 license = "GPL-3.0"
-repository = "https://github.com/rcore-os/tg-rcore-tutorial"
-homepage = "https://github.com/rcore-os/tg-rcore-tutorial"
-documentation = "https://docs.rs/tg-rcore-tutorial"
+repository = "https://github.com/Joshua912815/tg-rcore-tutorial"
+homepage = "https://github.com/Joshua912815/tg-rcore-tutorial/tree/t2l8-crate"
+documentation = "https://docs.rs/joshua912815-tg-rcore-tutorial-t2l8"
 readme = "README.md"
 
 # Include only necessary files for distribution
 include = [
     "Cargo.toml",
     "README.md",
+    "report.md",
+    "Makefile",
     "LICENSE",
     ".gitignore",
     ".gitmodules",

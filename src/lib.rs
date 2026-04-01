@@ -1,32 +1,34 @@
-//! Meta crate for the componentized rCore Tutorial workspace.
+//! T2L8 engineering-quality teaching bundle for tg-rcore-tutorial.
 //!
-//! This crate is a distribution bundle so learners can fetch the full
-//! teaching workspace via crates.io tooling (for example, cargo-clone).
+//! This crate packages the full set of sub-crates needed to reproduce the
+//! T2L8 experiment, including:
+//!
+//! - unified `[EVENT]` / `[METRIC]` tracing support,
+//! - user workloads for `ch3`, `ch4`, and `ch8`,
+//! - regression scripts,
+//! - design report and debugging documents.
 //!
 //! # Usage
 //!
-//! After cloning this crate via `cargo clone tg-rcore-tutorial`, you can
-//! extract all the submodules by running:
+//! After cloning this crate via cargo:
+//!
+//! ```bash
+//! cargo clone joshua912815-tg-rcore-tutorial-t2l8
+//! cd joshua912815-tg-rcore-tutorial-t2l8
+//! make run
+//! ```
+//!
+//! Or extract the bundled sub-crates manually:
 //!
 //! ```bash
 //! bash scripts/extract_submodules.sh
 //! ```
-//!
-//! This will extract all chapter crates and component crates from the
-//! bundle directory, enabling you to build and develop the full workspace.
-//!
-//! # Components
-//!
-//! The bundle contains:
-//! - **Chapter crates** (ch1-ch8): Progressive OS kernel implementations
-//! - **Component crates**: Reusable kernel modules (console, syscall, memory, etc.)
-//! - **Test utilities**: User programs and output checkers
 
-/// Crate identifier for the workspace bundle.
-pub const BUNDLE_NAME: &str = "tg-rcore-tutorial";
+/// Crate identifier for the T2L8 workspace bundle.
+pub const BUNDLE_NAME: &str = "joshua912815-tg-rcore-tutorial-t2l8";
 
 /// Version of the bundle.
-pub const BUNDLE_VERSION: &str = "0.4.5";
+pub const BUNDLE_VERSION: &str = "0.8.0-preview.1";
 
 /// List of all included submodule crates.
 pub const SUBMODULE_CRATES: &[&str] = &[

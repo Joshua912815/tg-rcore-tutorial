@@ -24,30 +24,25 @@
 //! - 最后结合 `processor.rs` 看线程生命周期与进程资源回收的关系。
 
 use crate::{
-    build_flags, fs::Fd, map_portal, parse_flags, processor::ProcessorInner, Sv39, Sv39Manager,
-    PROCESSOR,
+    PROCESSOR, Sv39, Sv39Manager, build_flags, fs::Fd, map_portal, parse_flags,
+    processor::ProcessorInner,
 };
-use alloc::{
-    alloc::alloc_zeroed,
-    boxed::Box,
-    collections::BTreeMap,
-    sync::Arc,
-    vec::Vec,
-};
+use alloc::{alloc::alloc_zeroed, boxed::Box, collections::BTreeMap, sync::Arc, vec::Vec};
 use core::alloc::Layout;
 use spin::Mutex;
-use tg_kernel_context::{foreign::ForeignContext, LocalContext};
+use tg_kernel_context::{LocalContext, foreign::ForeignContext};
 use tg_kernel_vm::{
-    page_table::{MmuMeta, VAddr, PPN, VPN},
     AddressSpace,
+    page_table::{MmuMeta, PPN, VAddr, VPN},
 };
 use tg_signal::Signal;
 use tg_signal_impl::SignalImpl;
 use tg_sync::{Condvar, Mutex as MutexTrait, Semaphore};
 use tg_task_manage::{ProcId, ThreadId};
 use xmas_elf::{
+    ElfFile,
     header::{self, HeaderPt2, Machine},
-    program, ElfFile,
+    program,
 };
 
 /// 线程（执行单元）
@@ -133,7 +128,10 @@ impl DeadlockState {
             if owner_tid == tid {
                 return true;
             }
-            let Some(waiting_mutex) = self.thread_state.get(&owner_tid).and_then(|s| s.mutex_waiting)
+            let Some(waiting_mutex) = self
+                .thread_state
+                .get(&owner_tid)
+                .and_then(|s| s.mutex_waiting)
             else {
                 return false;
             };
@@ -302,20 +300,26 @@ impl DeadlockState {
 
     fn ensure_thread_state(&mut self, tid: ThreadId) -> &mut ThreadDeadlockState {
         let sem_count = self.semaphore_total.len();
-        self.thread_state.entry(tid).or_insert_with(|| ThreadDeadlockState {
-            mutex_waiting: None,
-            sem_waiting: None,
-            sem_held: vec![0; sem_count],
-        })
+        self.thread_state
+            .entry(tid)
+            .or_insert_with(|| ThreadDeadlockState {
+                mutex_waiting: None,
+                sem_waiting: None,
+                sem_held: vec![0; sem_count],
+            })
     }
 
     fn prune_thread_state(&mut self, tid: ThreadId) {
-        let can_remove = self.thread_state.get(&tid).map(|state| {
-            state.mutex_waiting.is_none()
-                && state.sem_waiting.is_none()
-                && state.sem_held.iter().all(|held| *held == 0)
-                && !self.mutex_owner.iter().any(|owner| owner == &Some(tid))
-        }).unwrap_or(false);
+        let can_remove = self
+            .thread_state
+            .get(&tid)
+            .map(|state| {
+                state.mutex_waiting.is_none()
+                    && state.sem_waiting.is_none()
+                    && state.sem_held.iter().all(|held| *held == 0)
+                    && !self.mutex_owner.iter().any(|owner| owner == &Some(tid))
+            })
+            .unwrap_or(false);
         if can_remove {
             self.thread_state.remove(&tid);
         }
@@ -374,12 +378,18 @@ impl Process {
         let processor: *mut ProcessorInner = PROCESSOR.get_mut() as *mut ProcessorInner;
         let pthreads = unsafe { (*processor).get_thread(self.pid).unwrap() };
         let context = unsafe {
-            (*processor).get_task(pthreads[0]).unwrap().context.context.clone()
+            (*processor)
+                .get_task(pthreads[0])
+                .unwrap()
+                .context
+                .context
+                .clone()
         };
         let satp = (8 << 60) | address_space.root_ppn().val();
         let thread = Thread::new(satp, context);
         // 复制文件描述符表
-        let new_fd_table: Vec<Option<Mutex<Fd>>> = self.fd_table
+        let new_fd_table: Vec<Option<Mutex<Fd>>> = self
+            .fd_table
             .iter()
             .map(|fd| fd.as_ref().map(|f| Mutex::new(f.lock().clone())))
             .collect();
@@ -407,7 +417,9 @@ impl Process {
             HeaderPt2::Header64(pt2)
                 if pt2.type_.as_type() == header::Type::Executable
                     && pt2.machine.as_machine() == Machine::RISC_V =>
-            { pt2.entry_point as usize }
+            {
+                pt2.entry_point as usize
+            }
             _ => None?,
         };
 
@@ -416,16 +428,24 @@ impl Process {
 
         let mut address_space = AddressSpace::new();
         for program in elf.program_iter() {
-            if !matches!(program.get_type(), Ok(program::Type::Load)) { continue; }
+            if !matches!(program.get_type(), Ok(program::Type::Load)) {
+                continue;
+            }
             let off_file = program.offset() as usize;
             let len_file = program.file_size() as usize;
             let off_mem = program.virtual_addr() as usize;
             let end_mem = off_mem + program.mem_size() as usize;
             assert_eq!(off_file & PAGE_MASK, off_mem & PAGE_MASK);
             let mut flags: [u8; 5] = *b"U___V";
-            if program.flags().is_execute() { flags[1] = b'X'; }
-            if program.flags().is_write() { flags[2] = b'W'; }
-            if program.flags().is_read() { flags[3] = b'R'; }
+            if program.flags().is_execute() {
+                flags[1] = b'X';
+            }
+            if program.flags().is_write() {
+                flags[2] = b'W';
+            }
+            if program.flags().is_read() {
+                flags[3] = b'R';
+            }
             address_space.map(
                 VAddr::new(off_mem).floor()..VAddr::new(end_mem).ceil(),
                 &elf.input[off_file..][..len_file],
@@ -436,7 +456,8 @@ impl Process {
         // 分配 2 页用户栈
         let stack = unsafe {
             alloc_zeroed(Layout::from_size_align_unchecked(
-                2 << Sv39::PAGE_BITS, 1 << Sv39::PAGE_BITS,
+                2 << Sv39::PAGE_BITS,
+                1 << Sv39::PAGE_BITS,
             ))
         };
         address_space.map_extern(
@@ -456,11 +477,20 @@ impl Process {
                 address_space,
                 fd_table: vec![
                     // stdin
-                    Some(Mutex::new(Fd::Empty { read: true, write: false })),
+                    Some(Mutex::new(Fd::Empty {
+                        read: true,
+                        write: false,
+                    })),
                     // stdout
-                    Some(Mutex::new(Fd::Empty { read: false, write: true })),
+                    Some(Mutex::new(Fd::Empty {
+                        read: false,
+                        write: true,
+                    })),
                     // stderr
-                    Some(Mutex::new(Fd::Empty { read: false, write: true })),
+                    Some(Mutex::new(Fd::Empty {
+                        read: false,
+                        write: true,
+                    })),
                 ],
                 signal: Box::new(SignalImpl::new()),
                 semaphore_list: Vec::new(),

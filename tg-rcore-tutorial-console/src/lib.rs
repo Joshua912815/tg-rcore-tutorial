@@ -148,6 +148,23 @@ pub fn _print(args: fmt::Arguments) {
     buffer.flush();
 }
 
+/// 输出一条结构化事件日志。
+///
+/// 格式为 `[EVENT][章节][类别] 内容`，用于把分散的运行时行为统一编码，
+/// 方便学生阅读，也方便脚本后处理。
+pub fn emit_event(chapter: &str, category: &str, args: fmt::Arguments) {
+    _print(format_args!("[EVENT][{chapter}][{category}] {args}"));
+    println!();
+}
+
+/// 输出一条结构化指标摘要。
+///
+/// 格式为 `[METRIC][章节][名称] 内容`，适合在实验结束时打印统计信息。
+pub fn emit_metric(chapter: &str, name: &str, args: fmt::Arguments) {
+    _print(format_args!("[METRIC][{chapter}][{name}] {args}"));
+    println!();
+}
+
 /// 格式化打印。
 #[macro_export]
 macro_rules! print {
@@ -164,6 +181,22 @@ macro_rules! println {
         $crate::_print(core::format_args!($($arg)*));
         $crate::println!();
     }}
+}
+
+/// 输出结构化事件日志。
+#[macro_export]
+macro_rules! event {
+    ($chapter:expr, $category:expr, $($arg:tt)*) => {
+        $crate::emit_event($chapter, $category, core::format_args!($($arg)*));
+    };
+}
+
+/// 输出结构化指标摘要。
+#[macro_export]
+macro_rules! metric {
+    ($chapter:expr, $name:expr, $($arg:tt)*) => {
+        $crate::emit_metric($chapter, $name, core::format_args!($($arg)*));
+    };
 }
 
 /// 这个 Unit struct 是 `core::fmt` 要求的。

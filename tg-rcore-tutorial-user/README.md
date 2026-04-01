@@ -25,6 +25,16 @@
 - 支持按章节组织的大量测试程序。
 - `no_std` 用户态运行时支持。
 
+## T8 补充 workload
+
+为 T8“工程质量型个性化改造”，本 crate 额外补了三组面向可观测性的用户态 workload：
+
+- `t8_ch3_observe`：触发 `yield/get_time/sleep/write`，配合 ch3 的调度与 syscall tracing。
+- `t8_ch4_vm_probe`：触发 `mmap/munmap/trace_read/trace_write`，配合 ch4 的虚存 tracing。
+- `t8_ch8_usertest`：串联 `sync_sem`、`test_condvar`、`ch8_deadlock_mutex1`，配合 ch8 的同步 tracing。
+
+这些 workload 已接入 `cases.toml` 的章节练习集，可通过 T8 配套回归脚本直接运行并验证。
+
 ## 功能实现要点
 
 - `_start` 负责用户态程序初始化并跳转到 `main`。
