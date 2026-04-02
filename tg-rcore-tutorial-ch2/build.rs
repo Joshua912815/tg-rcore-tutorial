@@ -122,7 +122,8 @@ fn build_user_app(tg_user_root: &PathBuf, name: &str, base_address: u64) {
 
 fn objcopy_to_bin(elf: &PathBuf) -> PathBuf {
     let bin = elf.with_extension("bin");
-    let status = Command::new("rust-objcopy")
+    let objcopy = find_objcopy();
+    let status = Command::new(&objcopy)
         .args([
             elf.to_string_lossy().as_ref(),
             "--strip-all",
@@ -131,11 +132,63 @@ fn objcopy_to_bin(elf: &PathBuf) -> PathBuf {
             bin.to_string_lossy().as_ref(),
         ])
         .status()
-        .expect("failed to execute rust-objcopy");
+        .unwrap_or_else(|err| panic!("failed to execute {}: {}", objcopy.display(), err));
     if !status.success() {
-        panic!("rust-objcopy failed for {}", elf.display());
+        panic!("{} failed for {}", objcopy.display(), elf.display());
     }
     bin
+}
+
+fn find_objcopy() -> PathBuf {
+    if let Some(path) = env::var_os("RUST_OBJCOPY") {
+        let path = PathBuf::from(path);
+        if path.exists() {
+            return path;
+        }
+    }
+
+    if command_exists("rust-objcopy") {
+        return PathBuf::from("rust-objcopy");
+    }
+
+    let sysroot = command_output("rustc", &["--print", "sysroot"]);
+    let host = env::var("HOST").expect("HOST is not set by cargo");
+    let llvm_objcopy = PathBuf::from(sysroot)
+        .join("lib")
+        .join("rustlib")
+        .join(host)
+        .join("bin")
+        .join("llvm-objcopy");
+    if llvm_objcopy.exists() {
+        return llvm_objcopy;
+    }
+
+    panic!(
+        "cannot find objcopy tool; install cargo-binutils or llvm-tools-preview, \
+or set RUST_OBJCOPY to a usable binary"
+    );
+}
+
+fn command_exists(name: &str) -> bool {
+    Command::new(name)
+        .arg("--version")
+        .status()
+        .map(|status| status.success())
+        .unwrap_or(false)
+}
+
+fn command_output(name: &str, args: &[&str]) -> String {
+    let output = Command::new(name)
+        .args(args)
+        .output()
+        .unwrap_or_else(|err| panic!("failed to execute {}: {}", name, err));
+    if !output.status.success() {
+        panic!("{} {:?} failed", name, args);
+    }
+    String::from_utf8(output.stdout)
+        .unwrap_or_else(|err| panic!("{} {:?} returned non-utf8 output: {}", name, args, err))
+        .trim()
+        .to_owned()
 }
 
 fn write_app_asm(path: &PathBuf, base: u64, step: u64, bins: &[PathBuf]) {

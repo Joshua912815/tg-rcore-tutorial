@@ -14,6 +14,8 @@ use tg_console::log;
 pub use tg_console::{print, println};
 pub use tg_syscall::*;
 
+const SYSCALL_DRAW_TANGRAM_PIECE: usize = 0x1000;
+
 #[unsafe(no_mangle)]
 #[unsafe(link_section = ".text.entry")]
 pub extern "C" fn _start() -> ! {
@@ -99,6 +101,20 @@ pub fn trace_write(ptr: *const u8, value: u8) -> isize {
 
 pub fn count_syscall(syscall_id: usize) -> isize {
     trace(2, syscall_id, 0)
+}
+
+pub fn draw_tangram_piece(piece_id: usize) -> isize {
+    unsafe { native::syscall1(SyscallId(SYSCALL_DRAW_TANGRAM_PIECE), piece_id) }
+}
+
+pub fn run_tangram_piece_app(piece_id: usize, label: &str) -> i32 {
+    println!("render tangram piece {piece_id}: {label}");
+    if draw_tangram_piece(piece_id) == 0 {
+        0
+    } else {
+        println!("draw tangram piece {piece_id} failed");
+        1
+    }
 }
 
 /// 从管道读取数据

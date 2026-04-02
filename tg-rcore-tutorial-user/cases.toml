@@ -1,15 +1,20 @@
 [ch2]
-base = 0x8040_0000
+base = 0x8200_0000
 step = 0
 cases = [
-    "00hello_world",
-    "01store_fault",
-    "02power",
-    "03priv_inst",
-    "04priv_csr",
-    "08power_3",
-    "09power_5",
-    "10power_7",
+    "ch2_tangram_00_o_red",
+    "ch2_tangram_01_o_yellow",
+    "ch2_tangram_02_o_magenta",
+    "ch2_tangram_03_o_blue",
+    "ch2_tangram_04_o_green",
+    "ch2_tangram_05_o_cyan",
+    "ch2_tangram_06_s_cyan",
+    "ch2_tangram_07_s_blue_top",
+    "ch2_tangram_08_s_magenta_top",
+    "ch2_tangram_09_s_green",
+    "ch2_tangram_10_s_magenta_right",
+    "ch2_tangram_11_s_orange",
+    "ch2_tangram_12_s_blue_bottom",
 ]
 
 [ch3]
