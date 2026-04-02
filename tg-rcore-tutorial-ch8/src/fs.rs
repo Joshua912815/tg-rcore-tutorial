@@ -144,4 +144,33 @@ impl Fd {
             _ => -1,
         }
     }
+
+    /// 调整文件偏移。
+    pub fn seek(&self, offset: isize, whence: usize) -> isize {
+        const SEEK_SET: usize = 0;
+        const SEEK_CUR: usize = 1;
+        const SEEK_END: usize = 2;
+
+        match self {
+            Fd::File(f) => {
+                let base = match whence {
+                    SEEK_SET => 0isize,
+                    SEEK_CUR => f.offset.get() as isize,
+                    SEEK_END => f
+                        .inode
+                        .as_ref()
+                        .map(|inode| inode.size() as isize)
+                        .unwrap_or(0),
+                    _ => return -1,
+                };
+                let new_offset = base.saturating_add(offset);
+                if new_offset < 0 {
+                    return -1;
+                }
+                f.offset.set(new_offset as usize);
+                new_offset
+            }
+            _ => -1,
+        }
+    }
 }

@@ -1,9 +1,21 @@
 use serde::Deserialize;
-use std::{collections::HashMap, env, fs, path::PathBuf, process::Command};
+use std::{
+    collections::HashMap,
+    env, fs,
+    path::{Path, PathBuf},
+    process::Command,
+};
 use tg_easy_fs::{BlockDevice, EasyFileSystem};
 
 const TARGET_ARCH: &str = "riscv64gc-unknown-none-elf";
 const BLOCK_SZ: usize = 512;
+const DOOM_IMAGE: &str = "tg-rcore-doom-build";
+const FS_BLOCKS: u32 = 128 * 2048;
+
+struct PackedArtifact {
+    name: String,
+    host_path: PathBuf,
+}
 
 #[derive(Deserialize, Default)]
 struct Cases {
@@ -103,13 +115,25 @@ fn build_apps_and_pack_fs() {
         .join("target")
         .join(TARGET_ARCH)
         .join("debug");
+    let mut artifacts = Vec::new();
 
     for (i, name) in names.iter().enumerate() {
         let base_address = base + i as u64 * step;
         build_user_app(&tg_user_root, name, base_address);
+        artifacts.push(PackedArtifact {
+            name: name.clone(),
+            host_path: app_target_dir.join(name),
+        });
     }
 
-    easy_fs_pack(&names, &app_target_dir, &fs_target_dir).unwrap_or_else(|err| {
+    build_doom_port(&manifest_dir, &fs_target_dir);
+    artifacts.push(PackedArtifact {
+        name: "doom".to_string(),
+        host_path: fs_target_dir.join("doom"),
+    });
+    artifacts.extend(doom_assets(&manifest_dir));
+
+    easy_fs_pack(&artifacts, &fs_target_dir).unwrap_or_else(|err| {
         panic!(
             "failed to pack easy-fs image in {}: {err}",
             fs_target_dir.display()
@@ -128,6 +152,10 @@ fn build_user_app(tg_user_root: &PathBuf, name: &str, base_address: u64) {
         "--target",
         TARGET_ARCH,
     ]);
+
+    if name == "initproc" {
+        cmd.env("CHAPTER", "doom");
+    }
 
     if base_address != 0 {
         cmd.env("BASE_ADDRESS", base_address.to_string());
@@ -159,11 +187,7 @@ impl BlockDevice for BlockFile {
     }
 }
 
-fn easy_fs_pack(
-    cases: &[String],
-    app_target: &PathBuf,
-    fs_target: &PathBuf,
-) -> std::io::Result<()> {
+fn easy_fs_pack(artifacts: &[PackedArtifact], fs_target: &PathBuf) -> std::io::Result<()> {
     use std::fs::OpenOptions;
     use std::io::Read;
     use std::sync::Arc;
@@ -177,22 +201,132 @@ fn easy_fs_pack(
             .write(true)
             .create(true)
             .open(fs_file)?;
-        f.set_len(64 * 2048 * BLOCK_SZ as u64).unwrap();
+        f.set_len(FS_BLOCKS as u64 * BLOCK_SZ as u64).unwrap();
         f
     })));
 
-    let efs = EasyFileSystem::create(block_file, 64 * 2048, 1);
+    let efs = EasyFileSystem::create(block_file, FS_BLOCKS, 1);
     let root_inode = Arc::new(EasyFileSystem::root_inode(&efs));
 
-    for case in cases {
-        let mut host_file = std::fs::File::open(app_target.join(case)).unwrap();
+    for artifact in artifacts {
+        let mut host_file = std::fs::File::open(&artifact.host_path)?;
         let mut all_data: Vec<u8> = Vec::new();
         host_file.read_to_end(&mut all_data).unwrap();
-        let inode = root_inode.create(case.as_str()).unwrap();
+        let inode = root_inode.create(artifact.name.as_str()).unwrap();
         inode.write_at(0, all_data.as_slice());
     }
 
     Ok(())
+}
+
+fn build_doom_port(manifest_dir: &Path, fs_target_dir: &Path) {
+    let doom_dir = manifest_dir.join("doom");
+    let vendor_dir = manifest_dir.join("vendor").join("doomgeneric");
+    let dockerfile = doom_dir.join("Dockerfile");
+    let output = fs_target_dir.join("doom");
+
+    println!("cargo:rerun-if-changed={}", doom_dir.display());
+    println!("cargo:rerun-if-changed={}", vendor_dir.display());
+
+    fs::create_dir_all(fs_target_dir).unwrap_or_else(|err| {
+        panic!(
+            "failed to create Doom output directory {}: {}",
+            fs_target_dir.display(),
+            err
+        )
+    });
+
+    if !ensure_doom_builder_image(manifest_dir, &dockerfile) && output.exists() {
+        println!(
+            "cargo:warning=Docker unavailable; reusing cached Doom binary at {}",
+            output.display()
+        );
+        return;
+    }
+
+    let workspace_root = manifest_dir.parent().unwrap_or(manifest_dir);
+    let script = format!(
+        "set -e\n\
+         SRC=\"$(sed -n 's/^SRC_DOOM = //p' vendor/doomgeneric/Makefile | tr ' ' '\\n' | \
+         sed 's/\\.o$/.c/' | grep -v 'doomgeneric_xlib.c' | \
+         sed 's#^#vendor/doomgeneric/#' | tr '\\n' ' ')\"\n\
+         mkdir -p target/{target_arch}/debug\n\
+         riscv64-unknown-elf-gcc \
+         -specs=/usr/lib/picolibc/riscv64-unknown-elf/picolibc.specs \
+         -nostartfiles -march=rv64gc -mabi=lp64d -Os \
+         -D_DEFAULT_SOURCE -DNORMALUNIX \
+         -DDOOMGENERIC_RESX=640 -DDOOMGENERIC_RESY=400 \
+         -Ivendor/doomgeneric -Idoom \
+         -T doom/link.ld \
+         doom/start.c doom/tg_picolibc.c doom/doomgeneric_tg.c $SRC \
+         -o target/{target_arch}/debug/doom\n",
+        target_arch = TARGET_ARCH,
+    );
+
+    let status = Command::new("docker")
+        .args([
+            "run",
+            "--rm",
+            "-v",
+            &format!("{}:/work", workspace_root.display()),
+            "-w",
+            "/work/tg-rcore-tutorial-ch8",
+            DOOM_IMAGE,
+            "bash",
+            "-lc",
+            &script,
+        ])
+        .status()
+        .unwrap_or_else(|err| panic!("failed to run Docker for Doom build: {err}"));
+
+    if !status.success() {
+        panic!("failed to build Doom port");
+    }
+}
+
+fn ensure_doom_builder_image(manifest_dir: &Path, dockerfile: &Path) -> bool {
+    let inspect_ok = Command::new("docker")
+        .args(["image", "inspect", DOOM_IMAGE])
+        .status()
+        .map(|status| status.success())
+        .unwrap_or(false);
+    if inspect_ok {
+        return true;
+    }
+
+    let workspace_root = manifest_dir.parent().unwrap_or(manifest_dir);
+    let status = Command::new("docker")
+        .args([
+            "build",
+            "-t",
+            DOOM_IMAGE,
+            "-f",
+            dockerfile.to_string_lossy().as_ref(),
+            workspace_root.to_string_lossy().as_ref(),
+        ])
+        .status();
+
+    status.map(|s| s.success()).unwrap_or(false)
+}
+
+fn doom_assets(manifest_dir: &Path) -> Vec<PackedArtifact> {
+    let asset_dir = manifest_dir.join("doom").join("assets");
+    println!("cargo:rerun-if-changed={}", asset_dir.display());
+
+    for name in ["doom1.wad", "freedoom1.wad"] {
+        let host_path = asset_dir.join(name);
+        if host_path.exists() {
+            return vec![PackedArtifact {
+                name: name.to_string(),
+                host_path,
+            }];
+        }
+    }
+
+    panic!(
+        "no IWAD found in {}; add doom1.wad or freedoom1.wad",
+        asset_dir.display()
+    );
 }
 
 fn ensure_tg_user() -> PathBuf {

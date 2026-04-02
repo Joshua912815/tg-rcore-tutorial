@@ -48,6 +48,9 @@ pub trait IO: Sync {
     fn open(&self, caller: Caller, path: usize, flags: usize) -> isize {
         unimplemented!()
     }
+    fn lseek(&self, caller: Caller, fd: usize, offset: isize, whence: usize) -> isize {
+        unimplemented!()
+    }
     fn close(&self, caller: Caller, fd: usize) -> isize {
         unimplemented!()
     }
@@ -176,6 +179,26 @@ pub trait Trace: Sync {
     }
 }
 
+pub trait Graphics: Sync {
+    fn framebuffer_info(&self, caller: Caller, info: usize) -> isize {
+        unimplemented!()
+    }
+
+    fn framebuffer_present(
+        &self,
+        caller: Caller,
+        buffer: usize,
+        width: usize,
+        height: usize,
+    ) -> isize {
+        unimplemented!()
+    }
+
+    fn input_poll(&self, caller: Caller) -> isize {
+        unimplemented!()
+    }
+}
+
 static PROCESS: Container<dyn Process> = Container::new();
 static IO: Container<dyn IO> = Container::new();
 static MEMORY: Container<dyn Memory> = Container::new();
@@ -185,6 +208,7 @@ static SIGNAL: Container<dyn Signal> = Container::new();
 static THREAD: Container<dyn Thread> = Container::new();
 static SYNC_MUTEX: Container<dyn SyncMutex> = Container::new();
 static TRACE: Container<dyn Trace> = Container::new();
+static GRAPHICS: Container<dyn Graphics> = Container::new();
 
 #[inline]
 pub fn init_process(process: &'static dyn Process) {
@@ -231,6 +255,11 @@ pub fn init_trace(trace: &'static dyn Trace) {
     TRACE.init(trace);
 }
 
+#[inline]
+pub fn init_graphics(graphics: &'static dyn Graphics) {
+    GRAPHICS.init(graphics);
+}
+
 pub enum SyscallResult {
     Done(isize),
     Unsupported(SyscallId),
@@ -244,6 +273,7 @@ pub fn handle(caller: Caller, id: SyscallId, args: [usize; 6]) -> SyscallResult 
         Id::WRITE => IO.call(id, |io| io.write(caller, args[0], args[1], args[2])),
         Id::READ => IO.call(id, |io| io.read(caller, args[0], args[1], args[2])),
         Id::OPENAT => IO.call(id, |io| io.open(caller, args[0], args[1])),
+        Id::LSEEK => IO.call(id, |io| io.lseek(caller, args[0], args[1] as isize, args[2])),
         Id::CLOSE => IO.call(id, |io| io.close(caller, args[0])),
         Id::LINKAT => IO.call(id, |io| {
             io.linkat(
@@ -313,6 +343,13 @@ pub fn handle(caller: Caller, id: SyscallId, args: [usize; 6]) -> SyscallResult 
             sync_mutex.enable_deadlock_detect(caller, args[0] as _)
         }),
         Id::TRACE => TRACE.call(id, |trace| trace.trace(caller, args[0], args[1], args[2])),
+        Id::FRAMEBUFFER_INFO => {
+            GRAPHICS.call(id, |graphics| graphics.framebuffer_info(caller, args[0]))
+        }
+        Id::FRAMEBUFFER_PRESENT => GRAPHICS.call(id, |graphics| {
+            graphics.framebuffer_present(caller, args[0], args[1], args[2])
+        }),
+        Id::INPUT_POLL => GRAPHICS.call(id, |graphics| graphics.input_poll(caller)),
         Id::SPAWN => PROCESS.call(id, |proc| proc.spawn(caller, args[0], args[1])),
         Id::SETPRIORITY => SCHEDULING.call(id, |sched| sched.set_priority(caller, args[0] as _)),
         Id::BRK => PROCESS.call(id, |proc| proc.sbrk(caller, args[0] as _)),

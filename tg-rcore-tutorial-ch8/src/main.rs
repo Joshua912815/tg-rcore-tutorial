@@ -54,6 +54,8 @@ mod process;
 mod processor;
 /// VirtIO 块设备驱动
 mod virtio_block;
+/// VirtIO GPU / framebuffer 驱动
+mod virtio_gpu;
 
 #[macro_use]
 extern crate tg_console;
@@ -158,7 +160,7 @@ impl KernelSpace {
 static KERNEL_SPACE: KernelSpace = KernelSpace::new();
 
 /// VirtIO MMIO 设备地址范围
-pub const MMIO: &[(usize, usize)] = &[(0x1000_1000, 0x00_1000)];
+pub const MMIO: &[(usize, usize)] = &[(0x1000_1000, 0x00_1000), (0x1000_2000, 0x00_1000)];
 
 /// 内核主函数
 ///
@@ -197,9 +199,18 @@ extern "C" fn rust_main() -> ! {
     tg_syscall::init_process(&SyscallContext);
     tg_syscall::init_scheduling(&SyscallContext);
     tg_syscall::init_clock(&SyscallContext);
+    tg_syscall::init_memory(&SyscallContext);
+    tg_syscall::init_graphics(&SyscallContext);
     tg_syscall::init_signal(&SyscallContext);
     tg_syscall::init_thread(&SyscallContext);       // 本章新增：线程系统调用
     tg_syscall::init_sync_mutex(&SyscallContext);   // 本章新增：同步原语系统调用
+    let fb = virtio_gpu::init();
+    let fb_info = fb.info();
+    log::info!(
+        "VirtIO-GPU ready at {}x{}.",
+        fb_info.width,
+        fb_info.height
+    );
     // 步骤 8：加载 initproc（返回 Process + Thread）
     let initproc = read_all(FS.open("initproc", OpenFlags::RDONLY).unwrap());
     if let Some((process, thread)) = Process::from_elf(ElfFile::new(initproc.as_slice()).unwrap()) {
@@ -271,7 +282,14 @@ extern "C" fn rust_main() -> ! {
                     }
                 }
                 e => {
-                    log::error!("unsupported trap: {e:?}");
+                    let current_pid = unsafe { (*processor).get_current_proc().map(|p| p.pid) };
+                    log::error!(
+                        "unsupported trap: {e:?}, pid={:?}, tid={:?}, sepc={:#x}, stval={:#x}",
+                        current_pid,
+                        task.tid,
+                        task.context.context.pc(),
+                        stval::read(),
+                    );
                     unsafe { (*processor).make_current_exited(-3) };
                 }
             }
@@ -355,11 +373,12 @@ mod impls {
         build_flags,
         fs::{read_all, Fd, FS},
         processor::ProcessorInner,
+        virtio_gpu::GPU_DEVICE,
         Sv39, Thread, PROCESSOR,
     };
     use alloc::sync::Arc;
     use alloc::{alloc::alloc_zeroed, string::String, vec::Vec};
-    use core::{alloc::Layout, ptr::NonNull};
+    use core::{alloc::Layout, ops::Range, ptr::NonNull};
     use spin::Mutex;
     use tg_console::log;
     use tg_easy_fs::{make_pipe, FSManager, OpenFlags, UserBuffer};
@@ -436,6 +455,61 @@ mod impls {
     pub struct SyscallContext;
     const READABLE: VmFlags<Sv39> = build_flags("RV");
     const WRITEABLE: VmFlags<Sv39> = build_flags("W_V");
+    const VALID: VmFlags<Sv39> = build_flags("__V");
+
+    fn page_range(addr: usize, len: usize) -> Option<Range<VPN<Sv39>>> {
+        if len == 0 {
+            return Some(VPN::new(addr >> Sv39::PAGE_BITS)..VPN::new(addr >> Sv39::PAGE_BITS));
+        }
+        let end = addr.checked_add(len - 1)?;
+        Some(VAddr::<Sv39>::new(addr).floor()..VAddr::<Sv39>::new(end).ceil() + 1)
+    }
+
+    fn is_page_aligned(addr: usize) -> bool {
+        addr & ((1 << Sv39::PAGE_BITS) - 1) == 0
+    }
+
+    fn is_user_range(addr: usize, len: usize) -> bool {
+        let Some(end) = addr.checked_add(len) else {
+            return false;
+        };
+        addr < (1 << 38) && end <= (1 << 38)
+    }
+
+    fn mmap_flags(prot: i32) -> Option<VmFlags<Sv39>> {
+        match prot {
+            1 => Some(build_flags("U_RV")),
+            2 => Some(build_flags("U_WV")),
+            3 => Some(build_flags("U_WRV")),
+            _ => None,
+        }
+    }
+
+    fn ranges_overlap(lhs: &Range<VPN<Sv39>>, rhs: &Range<VPN<Sv39>>) -> bool {
+        lhs.start < rhs.end && rhs.start < lhs.end
+    }
+
+    fn copy_from_user(
+        current: &crate::process::Process,
+        addr: usize,
+        len: usize,
+    ) -> Option<Vec<u8>> {
+        let mut out = Vec::with_capacity(len);
+        let mut offset = 0usize;
+        while offset < len {
+            let vaddr = addr.checked_add(offset)?;
+            let ptr = current
+                .address_space
+                .translate::<u8>(VAddr::new(vaddr), READABLE)?;
+            let page_off = vaddr & ((1 << Sv39::PAGE_BITS) - 1);
+            let chunk = ((1 << Sv39::PAGE_BITS) - page_off).min(len - offset);
+            unsafe {
+                out.extend_from_slice(core::slice::from_raw_parts(ptr.as_ptr(), chunk));
+            }
+            offset += chunk;
+        }
+        Some(out)
+    }
 
     /// IO 系统调用（与第七章基本相同）
     ///
@@ -504,6 +578,18 @@ mod impls {
                     new_fd as isize
                 } else { -1 }
             } else { log::error!("ptr not writeable"); -1 }
+        }
+
+        fn lseek(&self, _caller: Caller, fd: usize, offset: isize, whence: usize) -> isize {
+            let current = PROCESSOR.get_mut().get_current_proc().unwrap();
+            if fd >= current.fd_table.len() {
+                return -1;
+            }
+            if let Some(file) = &current.fd_table[fd] {
+                file.lock().seek(offset, whence)
+            } else {
+                -1
+            }
         }
 
         #[inline]
@@ -590,6 +676,15 @@ mod impls {
         fn getpid(&self, _caller: Caller) -> isize {
             PROCESSOR.get_mut().get_current_proc().unwrap().pid.get_usize() as _
         }
+
+        fn sbrk(&self, _caller: Caller, size: i32) -> isize {
+            let current = PROCESSOR.get_mut().get_current_proc().unwrap();
+            if let Some(old_brk) = current.change_program_brk(size as isize) {
+                old_brk as isize
+            } else {
+                -1
+            }
+        }
     }
 
     impl Scheduling for SyscallContext {
@@ -615,6 +710,111 @@ mod impls {
                     } else { log::error!("ptr not readable"); -1 }
                 }
                 _ => -1,
+            }
+        }
+    }
+
+    impl Memory for SyscallContext {
+        fn mmap(
+            &self,
+            _caller: Caller,
+            addr: usize,
+            len: usize,
+            prot: i32,
+            _flags: i32,
+            _fd: i32,
+            _offset: usize,
+        ) -> isize {
+            if !is_page_aligned(addr) || !is_user_range(addr, len) {
+                return -1;
+            }
+            let Some(flags) = mmap_flags(prot) else {
+                return -1;
+            };
+            let Some(range) = page_range(addr, len) else {
+                return -1;
+            };
+            if range.is_empty() {
+                return 0;
+            }
+
+            let current = PROCESSOR.get_mut().get_current_proc().unwrap();
+            if current
+                .address_space
+                .areas
+                .iter()
+                .any(|area| ranges_overlap(area, &range))
+            {
+                return -1;
+            }
+
+            current.address_space.map(range, &[], 0, flags);
+            0
+        }
+
+        fn munmap(&self, _caller: Caller, addr: usize, len: usize) -> isize {
+            if !is_page_aligned(addr) || !is_user_range(addr, len) {
+                return -1;
+            }
+            let Some(range) = page_range(addr, len) else {
+                return -1;
+            };
+            if range.is_empty() {
+                return 0;
+            }
+
+            let current = PROCESSOR.get_mut().get_current_proc().unwrap();
+            let mut vpn = range.start;
+            while vpn < range.end {
+                if current
+                    .address_space
+                    .translate::<u8>(vpn.base(), VALID)
+                    .is_none()
+                {
+                    return -1;
+                }
+                vpn += 1;
+            }
+
+            current.address_space.unmap(range);
+            0
+        }
+    }
+
+    impl Graphics for SyscallContext {
+        fn framebuffer_info(&self, _caller: Caller, info: usize) -> isize {
+            let current = PROCESSOR.get_mut().get_current_proc().unwrap();
+            let Some(mut ptr) = current
+                .address_space
+                .translate::<FrameBufferInfo>(VAddr::new(info), WRITEABLE)
+            else {
+                return -1;
+            };
+            *unsafe { ptr.as_mut() } = GPU_DEVICE.info();
+            0
+        }
+
+        fn framebuffer_present(
+            &self,
+            _caller: Caller,
+            buffer: usize,
+            width: usize,
+            height: usize,
+        ) -> isize {
+            let Some(len) = width.checked_mul(height).and_then(|px| px.checked_mul(4)) else {
+                return -1;
+            };
+            let current = PROCESSOR.get_mut().get_current_proc().unwrap();
+            let Some(frame) = copy_from_user(current, buffer, len) else {
+                return -1;
+            };
+            GPU_DEVICE.present(&frame, width, height)
+        }
+
+        fn input_poll(&self, _caller: Caller) -> isize {
+            match tg_sbi::console_getchar() {
+                usize::MAX => -1,
+                c => c as isize,
             }
         }
     }
