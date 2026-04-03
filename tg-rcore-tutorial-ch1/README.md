@@ -1,6 +1,36 @@
 # 第一章：应用程序与基本执行环境
 
-本章实现了一个最简单的 RISC-V S 态裸机图形程序（tg-rcore-tutorial-ch1），展示操作系统的最小执行环境如何继续扩展到图形输出。程序在 QEMU 模拟的 RISC-V 64 硬件上运行，不依赖 OpenSBI 或 RustSBI，通过 `-bios none` 模式直接启动，初始化 VirtIO-GPU，借助 framebuffer 静态显示七巧板 “OS” 图案，并通过串口按键 `q` 退出。
+> crates.io 发布信息
+>
+> - Crate: `joshua912815-tg-rcore-tutorial-ch1-tangram`
+> - Version: `0.1.0-preview.1`
+> - Git branch: `ch1-tangram`
+> - Recommended release tag: `ch1-tangram-crate-v0.1.0-preview.1`
+> - Git repository: `https://github.com/Joshua912815/tg-rcore-tutorial`
+> - Package directory in repo: `tg-rcore-tutorial-ch1/`
+> - Experiment docs included in package:
+>   - `docs/ch1-tangram-report.md`
+>   - `docs/ch1-tangram-ai-log.md`
+>
+> 复现方式：
+>
+> ```bash
+> cargo clone joshua912815-tg-rcore-tutorial-ch1-tangram
+> cd joshua912815-tg-rcore-tutorial-ch1-tangram
+> cargo run
+> ```
+>
+> 或：
+>
+> ```bash
+> git clone https://github.com/Joshua912815/tg-rcore-tutorial.git
+> cd tg-rcore-tutorial
+> git checkout ch1-tangram-crate-v0.1.0-preview.1
+> cd tg-rcore-tutorial-ch1
+> cargo run
+> ```
+
+本 crate 是 `tg-rcore-tutorial-ch1` 的可独立发布快照，展示如何在最小裸机执行环境上继续扩展到图形输出。程序在 QEMU 模拟的 RISC-V 64 硬件上运行，不依赖 OpenSBI 或 RustSBI，通过 `-bios none` 模式直接启动，初始化 VirtIO-GPU，借助 framebuffer 静态显示七巧板 “OS” 图案，并通过串口按键 `q` 退出。
 
 通过本章的学习和实践，你将理解：
 
@@ -37,7 +67,7 @@ tg-rcore-tutorial-ch1/
 
 ## 源码阅读导航索引
 
-[返回根文档导航总表](../README.md#chapters-source-nav-map)
+[返回仓库根文档导航总表](https://github.com/Joshua912815/tg-rcore-tutorial/blob/ch1-tangram-crate-v0.1.0-preview.1/README.md#chapters-source-nav-map)
 
 建议按 “启动 -> 设备初始化 -> 图形渲染” 的顺序阅读。
 
@@ -95,7 +125,7 @@ cargo --version    # 应显示 cargo 1.xx.x
 
 ### 1.2 添加 RISC-V 64 编译目标
 
-由于 tg-rcore-tutorial-ch1 是面向 RISC-V 64 裸机平台的程序，需要添加对应的编译目标：
+由于 `joshua912815-tg-rcore-tutorial-ch1-tangram` 是面向 RISC-V 64 裸机平台的程序，需要添加对应的编译目标：
 
 ```bash
 rustup target add riscv64gc-unknown-none-elf
@@ -134,21 +164,24 @@ qemu-system-riscv64 --version
 **方式一**
 只获取本实验
 ```bash
-cargo clone tg-rcore-tutorial-ch1
-cd tg-rcore-tutorial-ch1
+cargo install cargo-clone
+cargo clone joshua912815-tg-rcore-tutorial-ch1-tangram
+cd joshua912815-tg-rcore-tutorial-ch1-tangram
 ```
-获取所有8个实验和所依赖的tg-* crates.
+获取所有实验所在仓库并按 tag 复现：
 **方式二**
 ```bash
-git clone https://github.com/rcore-os/tg-rcore-tutorial.git
-cd tg-rcore-tutorial/ch1
+git clone https://github.com/Joshua912815/tg-rcore-tutorial.git
+cd tg-rcore-tutorial
+git checkout ch1-tangram-crate-v0.1.0-preview.1
+cd tg-rcore-tutorial-ch1
 ```
 
 ## 二、编译与运行
 
 ### 2.1 编译
 
-在 `tg-rcore-tutorial-ch1` 目录下执行：
+在 crate 根目录下执行：
 
 ```bash
 cargo build
@@ -163,7 +196,7 @@ target = "riscv64gc-unknown-none-elf"
 
 编译过程中，`build.rs` 构建脚本会自动检测目标架构，为 RISC-V 64 生成链接脚本（linker.ld），控制程序的内存布局。
 
-编译成功后，可执行文件位于 `target/riscv64gc-unknown-none-elf/debug/tg-rcore-tutorial-ch1`。
+编译成功后，可执行文件位于 `target/riscv64gc-unknown-none-elf/debug/joshua912815-tg-rcore-tutorial-ch1-tangram`。
 
 ### 2.2 运行
 
@@ -180,7 +213,7 @@ qemu-system-riscv64 \
     -monitor none \
     -device virtio-gpu-device,bus=virtio-mmio-bus.0 \
     -bios none \
-    -kernel target/riscv64gc-unknown-none-elf/debug/tg-rcore-tutorial-ch1
+    -kernel target/riscv64gc-unknown-none-elf/debug/joshua912815-tg-rcore-tutorial-ch1-tangram
 ```
 
 **QEMU 参数说明：**
@@ -205,6 +238,16 @@ Tangram rendered. Press q to quit.
 ```
 
 同时 QEMU 会弹出图形窗口，显示静态七巧板 “OS” 图案。按终端中的 `q` 或 `Q` 后，程序调用 SBI 正常关机退出。
+
+### 2.4 运行辅助命令
+
+如果老师或助教更习惯 `make`，也可以直接使用：
+
+```bash
+make build
+make run
+make test
+```
 
 ---
 
