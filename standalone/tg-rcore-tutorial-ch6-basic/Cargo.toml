@@ -5,7 +5,7 @@ version = "0.6.0-preview.1"
 edition = "2024"
 authors = ["YdrMaster <ydrml@hotmail.com>","Yifan Wang<w-yf22@mails.tsinghua.edu.cn>","Yu Chen <yuchen@tsinghua.edu.cn>"]
 repository = "https://github.com/Joshua912815/tg-rcore-tutorial"
-homepage = "https://github.com/Joshua912815/tg-rcore-tutorial/tree/test/standalone/tg-rcore-tutorial-ch6-basic"
+homepage = "https://github.com/Joshua912815/tg-rcore-tutorial/tree/ch6-basic-crate-v0.6.0-preview.1/standalone/tg-rcore-tutorial-ch6-basic"
 documentation = "https://docs.rs/tg-rcore-tutorial-ch6-basic"
 license = "GPL-3.0"
 readme = "README.md"
@@ -13,17 +13,19 @@ keywords = ["ai", "ai4ose", "kernel", "learning", "os"]
 categories = ["no-std", "embedded"]
 include = [
     ".cargo/**",
+    "bundled/**",
     "build.rs",
     "Cargo.toml",
     "Cargo.lock",
     "LICENSE",
+    "Makefile",
     "README.md",
     "docs/**",
     "exercise.md",
     "rust-toolchain.toml",
+    "scripts/**",
     "src/**",
     "test.sh",
-    "vendor/**",
 ]
 
 [features]

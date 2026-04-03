@@ -9,6 +9,10 @@
 
 set -e
 
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+"$SCRIPT_DIR/scripts/ensure-vendor.sh"
+cd "$SCRIPT_DIR"
+
 HOST_TARGET="$(rustc -vV | sed -n 's/^host: //p')"
 
 GREEN='\033[0;32m'

@@ -10,7 +10,7 @@
 - 版本: `0.6.0-preview.1`
 - 仓库: <https://github.com/Joshua912815/tg-rcore-tutorial>
 - 对应目录: `standalone/tg-rcore-tutorial-ch6-basic`
-- 计划对应 tag: `ch6-basic-crate-v0.6.0-preview.1`
+- 对应 tag: `ch6-basic-crate-v0.6.0-preview.1`
 - 文档路径: `docs/filesystem-hardlink-forward-compat-report-ch6.md`
 
 ## 本 crate 包含什么
@@ -48,20 +48,20 @@
 ```bash
 cargo clone tg-rcore-tutorial-ch6-basic
 cd tg-rcore-tutorial-ch6-basic
-cargo run --features exercise
+make check-exercise
 ```
 
-进入用户 shell 后执行：
-
-```text
-ch6_usertest
-```
-
-也可以直接运行脚本：
+运行基础/练习测试：
 
 ```bash
 ./test.sh base
 ./test.sh exercise
+```
+
+直接启动练习版内核：
+
+```bash
+make run
 ```
 
 ### 方式 2：从仓库指定 tag 复现
@@ -71,7 +71,7 @@ git clone https://github.com/Joshua912815/tg-rcore-tutorial.git
 cd tg-rcore-tutorial
 git checkout ch6-basic-crate-v0.6.0-preview.1
 cd standalone/tg-rcore-tutorial-ch6-basic
-cargo run --features exercise
+make check-exercise
 ```
 
 ## 环境说明
@@ -88,7 +88,7 @@ docker run -it --name codex-ch6-basic \
 在容器内进入 crate 目录后运行：
 
 ```bash
-cargo check --features exercise
+make check-exercise
 ./test.sh base
 ./test.sh exercise
 ```
@@ -106,10 +106,9 @@ cargo check --features exercise
 
 为确保老师和助教从 crates.io 下载的真实发布包也能复现，本 crate 做了这些处理：
 
-- 将 Chapter 6 内核依赖的本地 `tg-*` crate 放入 `vendor/`
-- 将 `tg-rcore-tutorial-user` 放入 `vendor/`，避免依赖父仓库目录
-- 将 `tg-rcore-tutorial-checker` 放入 `vendor/`，测试脚本优先使用本地 checker
-- 根 crate 使用 `[patch.crates-io]` 指向包内 `vendor/`，保证解压后的发布包能直接构建
+- 发布包内置 `bundled/vendor-src.tar.gz`，包含 Chapter 6 所需的本地 `tg-*` crate、`tg-rcore-tutorial-user` 和 `tg-rcore-tutorial-checker`
+- `.cargo/config.toml` 使用 `[patch.crates-io]` 指向解包后的 `vendor/`
+- `scripts/ensure-vendor.sh`、`Makefile` 和 `test.sh` 会在需要时自动解包依赖
 - `build.rs` 优先使用包内 `vendor/tg-rcore-tutorial-user`
 
-因此，复现时不需要假定“本地刚好还有上层 workspace”。
+因此，复现时不需要假定“本地刚好还有上层 workspace”；从 crates.io 下载的真实包执行 `make` 或 `./test.sh` 即可完成准备。
