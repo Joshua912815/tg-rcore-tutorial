@@ -1,14 +1,16 @@
 [package]
 name = "tg-rcore-tutorial-user"
-description = "Minimal user-space runtime snapshot bundled with the AI4OSE ch8-doom crate."
-version = "0.1.0-preview.1"
+description = "User-space apps bundled with the AI4OSE Chapter 8 basic experiment crate."
+version = "0.4.8"
 edition = "2024"
-authors = ["Joshua"]
+authors = ["Joshua", "YdrMaster <ydrml@hotmail.com>"]
 repository = "https://github.com/Joshua912815/tg-rcore-tutorial"
-homepage = "https://github.com/Joshua912815/tg-rcore-tutorial/tree/ch8-doom/tg-rcore-tutorial-ch8/tg-rcore-tutorial-user"
-documentation = "https://github.com/Joshua912815/tg-rcore-tutorial/tree/ch8-doom/tg-rcore-tutorial-ch8/tg-rcore-tutorial-user"
+homepage = "https://github.com/Joshua912815/tg-rcore-tutorial/tree/ch8-basic-crate-v0.8.0-preview.2/tg-rcore-tutorial-user"
+documentation = "https://github.com/Joshua912815/tg-rcore-tutorial/tree/ch8-basic-crate-v0.8.0-preview.2/tg-rcore-tutorial-user"
 license = "GPL-3.0"
 readme = "README.md"
+keywords = ["ai", "ai4ose", "kernel", "learning", "os"]
+categories = ["no-std", "embedded"]
 
 [lib]
 name = "user_lib"
@@ -22,7 +24,7 @@ panic = "abort"
 
 [dependencies]
 tg-console = { package = "tg-rcore-tutorial-console", version = "0.4.8" }
-tg-syscall = { package = "ai4ose-tg-rcore-tutorial-syscall-doom", path = "../support-crates/ai4ose-tg-rcore-tutorial-syscall-doom", version = "0.1.0-preview.1", features = ["user"] }
+tg-syscall = { package = "tg-rcore-tutorial-syscall", version = "0.4.8", features = ["user"] }
 customizable-buddy = "0.0.2"
 
 [workspace]

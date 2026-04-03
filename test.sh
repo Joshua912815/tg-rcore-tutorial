@@ -32,9 +32,14 @@ ensure_tg_checker
 # 使用 pipefail 确保管道中任意命令失败都能被捕获
 set -o pipefail
 
+clean_build_artifacts() {
+    cargo clean
+    cargo clean --manifest-path tg-rcore-tutorial-user/Cargo.toml
+}
+
 run_base() {
     echo "运行 ch8 基础测试..."
-    cargo clean
+    clean_build_artifacts
     export CHAPTER=-8
     echo -e "${YELLOW}────────── cargo run 输出 ──────────${NC}"
 
@@ -43,20 +48,20 @@ run_base() {
         echo ""
         echo -e "${YELLOW}────────── 测试结果 ──────────${NC}"
         echo -e "${GREEN}✓ ch8 基础测试通过${NC}"
-        cargo clean
+        clean_build_artifacts
         return 0
     else
         echo ""
         echo -e "${YELLOW}────────── 测试结果 ──────────${NC}"
         echo -e "${RED}✗ ch8 基础测试失败${NC}"
-        cargo clean
+        clean_build_artifacts
         return 1
     fi
 }
 
 run_exercise() {
     echo "运行 ch8 练习测试..."
-    cargo clean
+    clean_build_artifacts
     export CHAPTER=8
     echo -e "${YELLOW}────────── cargo run --features exercise 输出 ──────────${NC}"
 
@@ -65,13 +70,13 @@ run_exercise() {
         echo ""
         echo -e "${YELLOW}────────── 测试结果 ──────────${NC}"
         echo -e "${GREEN}✓ ch8 练习测试通过${NC}"
-        cargo clean
+        clean_build_artifacts
         return 0
     else
         echo ""
         echo -e "${YELLOW}────────── 测试结果 ──────────${NC}"
         echo -e "${RED}✗ ch8 练习测试失败${NC}"
-        cargo clean
+        clean_build_artifacts
         return 1
     fi
 }

@@ -1,11 +1,11 @@
 [package]
 name = "joshua912815-tg-rcore-tutorial-ch8-basic"
 description = "AI4OSE publishable Chapter 8 basic experiment crate with threads, synchronization primitives, and deadlock detection."
-version = "0.8.0-preview.1"
+version = "0.8.0-preview.2"
 edition = "2024"
 authors = ["Joshua", "YdrMaster <ydrml@hotmail.com>", "Yifan Wang <w-yf22@mails.tsinghua.edu.cn>", "Yu Chen <yuchen@tsinghua.edu.cn>"]
 repository = "https://github.com/Joshua912815/tg-rcore-tutorial"
-homepage = "https://github.com/Joshua912815/tg-rcore-tutorial/tree/ch8-basic-crate-v0.8.0-preview.1"
+homepage = "https://github.com/Joshua912815/tg-rcore-tutorial/tree/ch8-basic-crate-v0.8.0-preview.2"
 documentation = "https://docs.rs/joshua912815-tg-rcore-tutorial-ch8-basic"
 license = "GPL-3.0"
 readme = "README.md"
@@ -24,7 +24,10 @@ include = [
     "src/**",
     "test.sh",
     "tg-rcore-tutorial-user/.cargo/config.toml",
+    "tg-rcore-tutorial-user/build.rs",
     "tg-rcore-tutorial-user/Cargo.toml",
+    "tg-rcore-tutorial-user/README.md",
+    "tg-rcore-tutorial-user/cases.toml",
     "tg-rcore-tutorial-user/src/**",
 ]
 

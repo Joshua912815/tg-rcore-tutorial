@@ -16,7 +16,6 @@ extern "C" fn main() -> i32 {
             "5" => "ch5_usertest",
             "6" => "ch6_usertest",
             "8" => "ch8_usertest",
-            "doom" => "doom",
             "-5" => "ch5b_usertest",
             "-6" => "ch6b_usertest",
             "-7" => "ch7b_usertest",
