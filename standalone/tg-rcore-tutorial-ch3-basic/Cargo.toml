@@ -1,0 +1,55 @@
+[package]
+name = "joshua912815-tg-rcore-tutorial-ch3-basic"
+description = "Standalone reproducible crate for the Chapter 3 basic lab of tg-rcore-tutorial."
+version = "0.3.0-preview.1"
+edition = "2024"
+authors = ["Joshua912815", "YdrMaster <ydrml@hotmail.com>", "Yifan Wang<w-yf22@mails.tsinghua.edu.cn>", "Yu Chen <yuchen@tsinghua.edu.cn>"]
+repository = "https://github.com/Joshua912815/tg-rcore-tutorial"
+homepage = "https://github.com/Joshua912815/tg-rcore-tutorial/tree/ch3-basic-crate-v0.3.0-preview.1/standalone/tg-rcore-tutorial-ch3-basic"
+documentation = "https://docs.rs/joshua912815-tg-rcore-tutorial-ch3-basic"
+license = "GPL-3.0"
+readme = "README.md"
+keywords = ["ai", "ai4ose", "kernel", "learning", "os"]
+categories = ["no-std", "embedded"]
+include = [
+    ".cargo/config.toml",
+    "Cargo.toml",
+    "Cargo.lock",
+    "LICENSE",
+    "README.md",
+    "build.rs",
+    "exercise.md",
+    "rust-toolchain.toml",
+    "src/**",
+    "docs/**",
+    "test.sh",
+    "vendor/tg-rcore-tutorial-user/.cargo/config.toml",
+    "vendor/tg-rcore-tutorial-user/build.rs",
+    "vendor/tg-rcore-tutorial-user/Cargo.toml",
+    "vendor/tg-rcore-tutorial-user/cases.toml",
+    "vendor/tg-rcore-tutorial-user/README.md",
+    "vendor/tg-rcore-tutorial-user/src/**",
+]
+
+[features]
+coop = []
+exercise = []
+
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+panic = "abort"
+
+[dependencies]
+riscv = "0.10.1"
+tg-sbi = { package = "tg-rcore-tutorial-sbi", version = "=0.4.8", features = ["nobios"] }
+tg-linker = { package = "tg-rcore-tutorial-linker", version = "=0.4.8" }
+tg-console = { package = "tg-rcore-tutorial-console", version = "=0.4.8" }
+tg-kernel-context = { package = "tg-rcore-tutorial-kernel-context", version = "=0.4.8" }
+tg-syscall = { package = "tg-rcore-tutorial-syscall", version = "=0.4.8", features = ["kernel"] }
+
+[build-dependencies]
+tg-linker = { package = "tg-rcore-tutorial-linker", version = "=0.4.8" }
+serde = { version = "1", features = ["derive"] }
+toml = "0.8"
