@@ -1,0 +1,28 @@
+[package]
+name = "tg-rcore-tutorial-user"
+description = "Minimal user-space runtime snapshot bundled with the AI4OSE ch8-doom crate."
+version = "0.1.0-preview.1"
+edition = "2024"
+authors = ["Joshua"]
+repository = "https://github.com/Joshua912815/tg-rcore-tutorial"
+homepage = "https://github.com/Joshua912815/tg-rcore-tutorial/tree/ch8-doom/tg-rcore-tutorial-ch8/tg-rcore-tutorial-user"
+documentation = "https://github.com/Joshua912815/tg-rcore-tutorial/tree/ch8-doom/tg-rcore-tutorial-ch8/tg-rcore-tutorial-user"
+license = "GPL-3.0"
+readme = "README.md"
+
+[lib]
+name = "user_lib"
+path = "src/lib.rs"
+
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+panic = "abort"
+
+[dependencies]
+tg-console = { package = "tg-rcore-tutorial-console", version = "0.4.8" }
+tg-syscall = { package = "ai4ose-tg-rcore-tutorial-syscall-doom", path = "../support-crates/ai4ose-tg-rcore-tutorial-syscall-doom", version = "0.1.0-preview.1", features = ["user"] }
+customizable-buddy = "0.0.2"
+
+[workspace]
