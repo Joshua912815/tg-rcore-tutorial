@@ -26,6 +26,7 @@ Cargo.lock
 dialog
 codex.md
 reports
+TASK2.md
 # compressed file for submodules 
 # bundle/submodules.tar.gz
 # Extracted workspace (optional - uncomment if you want to ignore extracted content)
