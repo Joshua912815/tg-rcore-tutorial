@@ -104,11 +104,12 @@ make check-exercise
 
 ## 可复现性说明
 
-为确保老师和助教从 crates.io 下载的真实发布包也能复现，本 crate 做了这些处理：
+为确保老师和助教从 crates.io 下载的真实发布包也能复现，同时满足 crates.io 的 10MB 包大小限制，本 crate 做了这些处理：
 
-- 发布包内置 `bundled/vendor-src.tar.gz`，包含 Chapter 6 所需的本地 `tg-*` crate、`tg-rcore-tutorial-user` 和 `tg-rcore-tutorial-checker`
-- `.cargo/config.toml` 使用 `[patch.crates-io]` 指向解包后的 `vendor/`
-- `scripts/ensure-vendor.sh`、`Makefile` 和 `test.sh` 会在需要时自动解包依赖
+- 内置 Chapter 6 必须修改的 `tg-rcore-tutorial-easy-fs`，以及运行/测试所需的 `tg-rcore-tutorial-user`、`tg-rcore-tutorial-checker`，并统一打包为 `bundled/vendor-src.tar.gz`
+- `.cargo/config.toml` 使用 `[patch.crates-io]` 指向解包后的本地 `easy-fs`
+- `scripts/ensure-vendor.sh`、`Makefile` 和 `test.sh` 会在需要时自动解包该依赖
 - `build.rs` 优先使用包内 `vendor/tg-rcore-tutorial-user`
+- `test.sh` 优先使用包内 `vendor/tg-rcore-tutorial-checker`
 
 因此，复现时不需要假定“本地刚好还有上层 workspace”；从 crates.io 下载的真实包执行 `make` 或 `./test.sh` 即可完成准备。

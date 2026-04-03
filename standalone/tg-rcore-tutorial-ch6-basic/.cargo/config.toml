@@ -1,12 +1,5 @@
 [patch.crates-io]
-tg-rcore-tutorial-console = { path = "vendor/tg-rcore-tutorial-console" }
 tg-rcore-tutorial-easy-fs = { path = "vendor/tg-rcore-tutorial-easy-fs" }
-tg-rcore-tutorial-kernel-context = { path = "vendor/tg-rcore-tutorial-kernel-context" }
-tg-rcore-tutorial-kernel-vm = { path = "vendor/tg-rcore-tutorial-kernel-vm" }
-tg-rcore-tutorial-linker = { path = "vendor/tg-rcore-tutorial-linker" }
-tg-rcore-tutorial-signal-defs = { path = "vendor/tg-rcore-tutorial-signal-defs" }
-tg-rcore-tutorial-syscall = { path = "vendor/tg-rcore-tutorial-syscall" }
-tg-rcore-tutorial-task-manage = { path = "vendor/tg-rcore-tutorial-task-manage" }
 
 # 默认编译目标：RISC-V 64 位裸机平台
 [build]
