@@ -8,18 +8,17 @@ It packages the completed `tg-rcore-tutorial` Chapter 8 kernel experiment as a s
 - mutex, semaphore, and condvar system calls
 - the Chapter 8 deadlock detection exercise
 - a local snapshot of `tg-rcore-tutorial-user` for reproducible builds
-- experiment documents that describe the implementation, verification, and AI collaboration process
+- a Chinese experiment report that can be used directly in the final course submission
 
 ## Release Metadata
 
 - Crate name: `joshua912815-tg-rcore-tutorial-ch8-basic`
-- Crate version: `0.8.0-preview.4`
+- Crate version: `0.8.0-preview.5`
 - Git repository: `https://github.com/Joshua912815/tg-rcore-tutorial`
-- Recommended git tag: `ch8-basic-crate-v0.8.0-preview.4`
+- Recommended git tag: `ch8-basic-crate-v0.8.0-preview.5`
 - Documentation on docs.rs: `https://docs.rs/joshua912815-tg-rcore-tutorial-ch8-basic`
-- Included report paths:
-  - `docs/ch8-basic-report.md`
-  - `docs/ch8-basic-ai-log.md`
+- Included report path:
+  - `docs/concurrency-deadlock-detection-report-ch8.md`
 
 ## What This Crate Solves
 
@@ -64,7 +63,7 @@ cargo run --features exercise
 ## Reproduce From Git Tag
 
 ```bash
-git clone --branch ch8-basic-crate-v0.8.0-preview.4 --depth 1 https://github.com/Joshua912815/tg-rcore-tutorial.git
+git clone --branch ch8-basic-crate-v0.8.0-preview.5 --depth 1 https://github.com/Joshua912815/tg-rcore-tutorial.git
 cd tg-rcore-tutorial
 cargo run
 ```
@@ -111,8 +110,7 @@ Key exercise outputs include:
 
 ## Included Documents
 
-- Report: [`docs/ch8-basic-report.md`](docs/ch8-basic-report.md)
-- AI collaboration notes: [`docs/ch8-basic-ai-log.md`](docs/ch8-basic-ai-log.md)
+- Final report material: [`docs/concurrency-deadlock-detection-report-ch8.md`](docs/concurrency-deadlock-detection-report-ch8.md)
 
 ## License
 
