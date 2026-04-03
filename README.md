@@ -13,9 +13,9 @@ It packages the completed `tg-rcore-tutorial` Chapter 8 kernel experiment as a s
 ## Release Metadata
 
 - Crate name: `joshua912815-tg-rcore-tutorial-ch8-basic`
-- Crate version: `0.8.0-preview.2`
+- Crate version: `0.8.0-preview.4`
 - Git repository: `https://github.com/Joshua912815/tg-rcore-tutorial`
-- Recommended git tag: `ch8-basic-crate-v0.8.0-preview.2`
+- Recommended git tag: `ch8-basic-crate-v0.8.0-preview.4`
 - Documentation on docs.rs: `https://docs.rs/joshua912815-tg-rcore-tutorial-ch8-basic`
 - Included report paths:
   - `docs/ch8-basic-report.md`
@@ -64,7 +64,7 @@ cargo run --features exercise
 ## Reproduce From Git Tag
 
 ```bash
-git clone --branch ch8-basic-crate-v0.8.0-preview.2 --depth 1 https://github.com/Joshua912815/tg-rcore-tutorial.git
+git clone --branch ch8-basic-crate-v0.8.0-preview.4 --depth 1 https://github.com/Joshua912815/tg-rcore-tutorial.git
 cd tg-rcore-tutorial
 cargo run
 ```

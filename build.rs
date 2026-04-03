@@ -214,9 +214,16 @@ fn ensure_tg_user() -> PathBuf {
 
     let manifest_dir = PathBuf::from(env::var_os("CARGO_MANIFEST_DIR").unwrap());
     let tg_user_dir = manifest_dir.join(&local_dir_name);
+    let vendor_archive = manifest_dir.join("vendor").join(format!("{crate_name}-{version}.tar.gz"));
 
     // 本地缓存目录已存在则直接使用
     if tg_user_dir.join("Cargo.toml").exists() {
+        ensure_workspace_table(&tg_user_dir);
+        return tg_user_dir;
+    }
+
+    if vendor_archive.exists() {
+        extract_tg_user_archive(&vendor_archive, &tg_user_dir);
         ensure_workspace_table(&tg_user_dir);
         return tg_user_dir;
     }
@@ -251,6 +258,41 @@ fn ensure_tg_user() -> PathBuf {
     ensure_workspace_table(&tg_user_dir);
 
     tg_user_dir
+}
+
+fn extract_tg_user_archive(archive: &PathBuf, target_dir: &PathBuf) {
+    use flate2::read::GzDecoder;
+
+    if target_dir.exists() {
+        fs::remove_dir_all(target_dir).unwrap_or_else(|err| {
+            panic!(
+                "failed to remove stale tg-user directory {}: {}",
+                target_dir.display(),
+                err
+            )
+        });
+    }
+    fs::create_dir_all(target_dir).unwrap_or_else(|err| {
+        panic!(
+            "failed to create tg-user directory {}: {}",
+            target_dir.display(),
+            err
+        )
+    });
+
+    let file = std::fs::File::open(archive).unwrap_or_else(|err| {
+        panic!("failed to open bundled tg-user archive {}: {}", archive.display(), err)
+    });
+    let decoder = GzDecoder::new(file);
+    let mut tar_archive = tar::Archive::new(decoder);
+    tar_archive.unpack(target_dir).unwrap_or_else(|err| {
+        panic!(
+            "failed to unpack bundled tg-user archive {} into {}: {}",
+            archive.display(),
+            target_dir.display(),
+            err
+        )
+    });
 }
 
 /// 若 Cargo.toml 末尾尚无 [workspace] 表，则追加一个空的，

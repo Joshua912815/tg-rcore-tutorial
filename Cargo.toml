@@ -1,11 +1,11 @@
 [package]
 name = "joshua912815-tg-rcore-tutorial-ch8-basic"
 description = "AI4OSE publishable Chapter 8 basic experiment crate with threads, synchronization primitives, and deadlock detection."
-version = "0.8.0-preview.2"
+version = "0.8.0-preview.4"
 edition = "2024"
 authors = ["Joshua", "YdrMaster <ydrml@hotmail.com>", "Yifan Wang <w-yf22@mails.tsinghua.edu.cn>", "Yu Chen <yuchen@tsinghua.edu.cn>"]
 repository = "https://github.com/Joshua912815/tg-rcore-tutorial"
-homepage = "https://github.com/Joshua912815/tg-rcore-tutorial/tree/ch8-basic-crate-v0.8.0-preview.2"
+homepage = "https://github.com/Joshua912815/tg-rcore-tutorial/tree/ch8-basic-crate-v0.8.0-preview.4"
 documentation = "https://docs.rs/joshua912815-tg-rcore-tutorial-ch8-basic"
 license = "GPL-3.0"
 readme = "README.md"
@@ -29,6 +29,7 @@ include = [
     "tg-rcore-tutorial-user/README.md",
     "tg-rcore-tutorial-user/cases.toml",
     "tg-rcore-tutorial-user/src/**",
+    "vendor/tg-rcore-tutorial-user-0.4.8.tar.gz",
 ]
 
 [features]
@@ -64,3 +65,5 @@ tg-linker = { package = "tg-rcore-tutorial-linker", version = "0.4.8" }
 tg-easy-fs = { package = "tg-rcore-tutorial-easy-fs", version = "0.4.8" }
 serde = { version = "1", features = ["derive"] }
 toml = "0.8"
+flate2 = "1"
+tar = "0.4"
