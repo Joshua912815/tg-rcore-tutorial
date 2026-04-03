@@ -1,0 +1,25 @@
+[package]
+name = "ai4ose-tg-rcore-tutorial-syscall-doom"
+description = "Doom-oriented syscall definitions and user/kernel interfaces for AI4OSE tg-rcore tutorial experiments."
+version = "0.1.0-preview.1"
+edition = "2024"
+authors = ["Joshua"]
+repository = "https://github.com/Joshua912815/tg-rcore-tutorial"
+homepage = "https://github.com/Joshua912815/tg-rcore-tutorial/tree/ch8-doom"
+documentation = "https://docs.rs/ai4ose-tg-rcore-tutorial-syscall-doom"
+license = "GPL-3.0"
+readme = "README.md"
+keywords = ["ai", "ai4ose", "kernel", "learning", "os"]
+categories = ["no-std", "embedded"]
+
+[dependencies]
+spin = "0.9"
+bitflags = "1.2"
+tg-signal-defs = { package = "tg-rcore-tutorial-signal-defs", version = "0.4.8" }
+
+[features]
+kernel = []
+user = []
+
+[package.metadata.docs.rs]
+targets = ["riscv64gc-unknown-none-elf"]

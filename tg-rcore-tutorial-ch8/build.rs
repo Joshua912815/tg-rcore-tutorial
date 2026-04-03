@@ -244,7 +244,7 @@ fn build_doom_port(manifest_dir: &Path, fs_target_dir: &Path) {
         return;
     }
 
-    let workspace_root = manifest_dir.parent().unwrap_or(manifest_dir);
+    let mount_root = manifest_dir;
     let script = format!(
         "set -e\n\
          SRC=\"$(sed -n 's/^SRC_DOOM = //p' vendor/doomgeneric/Makefile | tr ' ' '\\n' | \
@@ -268,9 +268,9 @@ fn build_doom_port(manifest_dir: &Path, fs_target_dir: &Path) {
             "run",
             "--rm",
             "-v",
-            &format!("{}:/work", workspace_root.display()),
+            &format!("{}:/work", mount_root.display()),
             "-w",
-            "/work/tg-rcore-tutorial-ch8",
+            "/work",
             DOOM_IMAGE,
             "bash",
             "-lc",
@@ -294,7 +294,6 @@ fn ensure_doom_builder_image(manifest_dir: &Path, dockerfile: &Path) -> bool {
         return true;
     }
 
-    let workspace_root = manifest_dir.parent().unwrap_or(manifest_dir);
     let status = Command::new("docker")
         .args([
             "build",
@@ -302,7 +301,7 @@ fn ensure_doom_builder_image(manifest_dir: &Path, dockerfile: &Path) -> bool {
             DOOM_IMAGE,
             "-f",
             dockerfile.to_string_lossy().as_ref(),
-            workspace_root.to_string_lossy().as_ref(),
+            manifest_dir.to_string_lossy().as_ref(),
         ])
         .status();
 
@@ -348,9 +347,16 @@ fn ensure_tg_user() -> PathBuf {
 
     let manifest_dir = PathBuf::from(env::var_os("CARGO_MANIFEST_DIR").unwrap());
     let tg_user_dir = manifest_dir.join(&local_dir_name);
+    let bundled_user_dir = manifest_dir.join("bundled-user");
 
     // 本地缓存目录已存在则直接使用
     if tg_user_dir.join("Cargo.toml").exists() {
+        ensure_workspace_table(&tg_user_dir);
+        return tg_user_dir;
+    }
+
+    if bundled_user_dir.exists() {
+        materialize_bundled_user(&manifest_dir, &bundled_user_dir, &tg_user_dir);
         ensure_workspace_table(&tg_user_dir);
         return tg_user_dir;
     }
@@ -385,6 +391,103 @@ fn ensure_tg_user() -> PathBuf {
     ensure_workspace_table(&tg_user_dir);
 
     tg_user_dir
+}
+
+fn materialize_bundled_user(manifest_dir: &Path, bundled_user_dir: &Path, target_dir: &Path) {
+    copy_dir_all(bundled_user_dir, target_dir).unwrap_or_else(|err| {
+        panic!(
+            "failed to materialize bundled user sources from {} to {}: {}",
+            bundled_user_dir.display(),
+            target_dir.display(),
+            err
+        )
+    });
+
+    let syscall_local = manifest_dir
+        .join("support-crates")
+        .join("ai4ose-tg-rcore-tutorial-syscall-doom")
+        .join("Cargo.toml");
+
+    let syscall_dep = if syscall_local.exists() {
+        r#"tg-syscall = { package = "ai4ose-tg-rcore-tutorial-syscall-doom", path = "../support-crates/ai4ose-tg-rcore-tutorial-syscall-doom", version = "0.1.0-preview.1", features = ["user"] }"#
+            .to_string()
+    } else {
+        r#"tg-syscall = { package = "ai4ose-tg-rcore-tutorial-syscall-doom", version = "0.1.0-preview.1", features = ["user"] }"#
+            .to_string()
+    };
+
+    let cargo_toml = format!(
+        r#"[package]
+name = "tg-rcore-tutorial-user"
+description = "Minimal user-space runtime snapshot bundled with the AI4OSE ch8-doom crate."
+version = "0.1.0-preview.1"
+edition = "2024"
+authors = ["Joshua"]
+repository = "https://github.com/Joshua912815/tg-rcore-tutorial"
+homepage = "https://github.com/Joshua912815/tg-rcore-tutorial/tree/ch8-doom/tg-rcore-tutorial-ch8"
+documentation = "https://github.com/Joshua912815/tg-rcore-tutorial/tree/ch8-doom/tg-rcore-tutorial-ch8/bundled-user"
+license = "GPL-3.0"
+readme = "README.md"
+
+[lib]
+name = "user_lib"
+path = "src/lib.rs"
+
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+panic = "abort"
+
+[dependencies]
+tg-console = {{ package = "tg-rcore-tutorial-console", version = "0.4.8" }}
+{syscall_dep}
+customizable-buddy = "0.0.2"
+"#,
+        syscall_dep = syscall_dep,
+    );
+
+    fs::write(target_dir.join("Cargo.toml"), cargo_toml).unwrap_or_else(|err| {
+        panic!(
+            "failed to write generated bundled-user Cargo.toml in {}: {}",
+            target_dir.display(),
+            err
+        )
+    });
+
+    let cases_toml = r#"[ch8]
+cases = [
+    "initproc",
+]
+
+[ch8_exercise]
+cases = [
+    "initproc",
+]
+"#;
+    fs::write(target_dir.join("cases.toml"), cases_toml).unwrap_or_else(|err| {
+        panic!(
+            "failed to write generated bundled-user cases.toml in {}: {}",
+            target_dir.display(),
+            err
+        )
+    });
+}
+
+fn copy_dir_all(src: &Path, dst: &Path) -> std::io::Result<()> {
+    fs::create_dir_all(dst)?;
+    for entry in fs::read_dir(src)? {
+        let entry = entry?;
+        let ty = entry.file_type()?;
+        let src_path = entry.path();
+        let dst_path = dst.join(entry.file_name());
+        if ty.is_dir() {
+            copy_dir_all(&src_path, &dst_path)?;
+        } else {
+            fs::copy(&src_path, &dst_path)?;
+        }
+    }
+    Ok(())
 }
 
 /// 若 Cargo.toml 末尾尚无 [workspace] 表，则追加一个空的，

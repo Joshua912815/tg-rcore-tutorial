@@ -21,6 +21,18 @@ use tg_easy_fs::{
     EasyFileSystem, FSManager, FileHandle, Inode, OpenFlags, PipeReader, PipeWriter, UserBuffer,
 };
 
+fn inode_len(inode: &Inode) -> usize {
+    let mut offset = 0usize;
+    let mut buffer = [0u8; 4096];
+    loop {
+        let len = inode.read_at(offset, &mut buffer);
+        if len == 0 {
+            return offset;
+        }
+        offset += len;
+    }
+}
+
 /// 全局文件系统实例（延迟初始化）
 pub static FS: Lazy<FileSystem> = Lazy::new(|| FileSystem {
     root: EasyFileSystem::root_inode(&EasyFileSystem::open(BLOCK_DEVICE.clone())),
@@ -159,7 +171,7 @@ impl Fd {
                     SEEK_END => f
                         .inode
                         .as_ref()
-                        .map(|inode| inode.size() as isize)
+                        .map(|inode| inode_len(inode) as isize)
                         .unwrap_or(0),
                     _ => return -1,
                 };

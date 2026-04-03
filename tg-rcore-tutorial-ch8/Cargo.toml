@@ -1,19 +1,39 @@
 [package]
-name = "tg-rcore-tutorial-ch8"
-description = "Chapter 8 of rCore Tutorial: Concurrency with threads, mutex, semaphore and condvar."
-version = "0.4.8"
+name = "ai4ose-tg-rcore-tutorial-ch8-doom"
+description = "Publishable AI4OSE ch8-doom crate: a self-contained tg-rcore tutorial Chapter 8 DoomGeneric port with framebuffer rendering."
+version = "0.1.0-preview.1"
 edition = "2024"
-authors = ["YdrMaster <ydrml@hotmail.com>", "Yifan Wang <w-yf22@mails.tsinghua.edu.cn>", "Yu Chen <yuchen@tsinghua.edu.cn>"]
-repository = "https://github.com/rcore-os/tg-rcore-tutorial-ch8"
-homepage = "https://github.com/rcore-os/tg-rcore-tutorial-ch8/tree/test"
-documentation = "https://docs.rs/tg-rcore-tutorial-ch8"
+authors = ["Joshua"]
+repository = "https://github.com/Joshua912815/tg-rcore-tutorial"
+homepage = "https://github.com/Joshua912815/tg-rcore-tutorial/tree/ch8-doom/tg-rcore-tutorial-ch8"
+documentation = "https://docs.rs/ai4ose-tg-rcore-tutorial-ch8-doom"
 license = "GPL-3.0"
 readme = "README.md"
-keywords = ["rcore", "tutorial", "no-std", "riscv", "concurrency"]
+keywords = ["ai", "ai4ose", "kernel", "learning", "os"]
 categories = ["no-std", "embedded"]
-exclude = [
-    "tg-user/**",
-#    ".cargo/config.toml",
+include = [
+    ".cargo/config.toml",
+    "Cargo.toml",
+    "LICENSE",
+    "Makefile",
+    "README.md",
+    "build.rs",
+    "bundled-user/**",
+    "docs/**",
+    "doom/Dockerfile",
+    "doom/assets/doom1.wad",
+    "doom/doomgeneric_tg.c",
+    "doom/link.ld",
+    "doom/start.c",
+    "doom/tg_picolibc.c",
+    "rust-toolchain.toml",
+    "src/**",
+    "support-crates/ai4ose-tg-rcore-tutorial-syscall-doom/Cargo.toml",
+    "support-crates/ai4ose-tg-rcore-tutorial-syscall-doom/README.md",
+    "support-crates/ai4ose-tg-rcore-tutorial-syscall-doom/build.rs",
+    "support-crates/ai4ose-tg-rcore-tutorial-syscall-doom/src/**",
+    "test.sh",
+    "vendor/doomgeneric/**",
 ]
 
 [features]
@@ -32,20 +52,20 @@ riscv = "0.10.1"
 spin = "0.9"
 
 tg-sbi = { package = "tg-rcore-tutorial-sbi", path = "../tg-rcore-tutorial-sbi", version = "0.4.8", features = ["nobios"] }
-tg-linker = { package = "tg-rcore-tutorial-linker", path = "../tg-rcore-tutorial-linker", version = "0.4.8" }
-tg-console = { package = "tg-rcore-tutorial-console", path = "../tg-rcore-tutorial-console", version = "0.4.8" }
-tg-kernel-context = { package = "tg-rcore-tutorial-kernel-context", path = "../tg-rcore-tutorial-kernel-context", version = "0.4.8", features = ["foreign"] }
-tg-kernel-alloc = { package = "tg-rcore-tutorial-kernel-alloc", path = "../tg-rcore-tutorial-kernel-alloc", version = "0.4.8" }
-tg-kernel-vm = { package = "tg-rcore-tutorial-kernel-vm", path = "../tg-rcore-tutorial-kernel-vm", version = "0.4.8" }
-tg-syscall = { package = "tg-rcore-tutorial-syscall", path = "../tg-rcore-tutorial-syscall", version = "0.4.8", features = ["kernel"] }
-tg-task-manage = { package = "tg-rcore-tutorial-task-manage", path = "../tg-rcore-tutorial-task-manage", version = "0.4.8", features = ["thread"] }
-tg-easy-fs = { package = "tg-rcore-tutorial-easy-fs", path = "../tg-rcore-tutorial-easy-fs", version = "0.4.8" }
-tg-signal = { package = "tg-rcore-tutorial-signal", path = "../tg-rcore-tutorial-signal", version = "0.4.8" }
-tg-signal-impl = { package = "tg-rcore-tutorial-signal-impl", path = "../tg-rcore-tutorial-signal-impl", version = "0.4.8" }
-tg-sync = { package = "tg-rcore-tutorial-sync", path = "../tg-rcore-tutorial-sync", version = "0.4.8" }
+tg-linker = { package = "tg-rcore-tutorial-linker", version = "0.4.8" }
+tg-console = { package = "tg-rcore-tutorial-console", version = "0.4.8" }
+tg-kernel-context = { package = "tg-rcore-tutorial-kernel-context", version = "0.4.8", features = ["foreign"] }
+tg-kernel-alloc = { package = "tg-rcore-tutorial-kernel-alloc", version = "0.4.8" }
+tg-kernel-vm = { package = "tg-rcore-tutorial-kernel-vm", version = "0.4.8" }
+tg-syscall = { package = "ai4ose-tg-rcore-tutorial-syscall-doom", path = "support-crates/ai4ose-tg-rcore-tutorial-syscall-doom", version = "0.1.0-preview.1", features = ["kernel"] }
+tg-task-manage = { package = "tg-rcore-tutorial-task-manage", version = "0.4.8", features = ["thread"] }
+tg-easy-fs = { package = "tg-rcore-tutorial-easy-fs", version = "0.4.8" }
+tg-signal = { package = "tg-rcore-tutorial-signal", version = "0.4.8" }
+tg-signal-impl = { package = "tg-rcore-tutorial-signal-impl", version = "0.4.8" }
+tg-sync = { package = "tg-rcore-tutorial-sync", version = "0.4.8" }
 
 [build-dependencies]
-tg-linker = { package = "tg-rcore-tutorial-linker", path = "../tg-rcore-tutorial-linker", version = "0.4.8" }
-tg-easy-fs = { package = "tg-rcore-tutorial-easy-fs", path = "../tg-rcore-tutorial-easy-fs", version = "0.4.8" }
+tg-linker = { package = "tg-rcore-tutorial-linker", version = "0.4.8" }
+tg-easy-fs = { package = "tg-rcore-tutorial-easy-fs", version = "0.4.8" }
 serde = { version = "1", features = ["derive"] }
 toml = "0.8"
