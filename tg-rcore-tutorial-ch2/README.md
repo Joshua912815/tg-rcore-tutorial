@@ -1,5 +1,33 @@
 # 第二章：批处理系统
 
+> crates.io 发布信息
+>
+> - Crate: `joshua912815-tg-rcore-tutorial-ch2-moving-tangram`
+> - Version: `0.1.1-preview.1`
+> - Git branch: `ch2-moving-tangram`
+> - Recommended release tag: `ch2-moving-tangram-crate-v0.1.1-preview.1`
+> - Git repository: `https://github.com/Joshua912815/tg-rcore-tutorial`
+> - Experiment docs included in package:
+>   - `docs/ch2-moving-tangram-report.md`
+>   - `docs/ch2-moving-tangram-ai-log.md`
+>
+> 复现方式：
+>
+> ```bash
+> cargo clone joshua912815-tg-rcore-tutorial-ch2-moving-tangram
+> cd joshua912815-tg-rcore-tutorial-ch2-moving-tangram
+> cargo run
+> ```
+>
+> 或：
+>
+> ```bash
+> git clone https://github.com/Joshua912815/tg-rcore-tutorial.git
+> cd tg-rcore-tutorial/tg-rcore-tutorial-ch2
+> git checkout ch2-moving-tangram-crate-v0.1.1-preview.1
+> cargo run
+> ```
+
 本章在第一章"最小执行环境"的基础上，实现了一个**批处理操作系统**（tg-rcore-tutorial-ch2）。它能够依次加载并运行多个用户程序，支持特权级切换和 Trap 处理，并实现了 `write` 和 `exit` 两个系统调用。
 
 通过本章的学习和实践，你将理解：
@@ -117,10 +145,9 @@ qemu-system-riscv64 --version    # 建议 >= 7.0
 
 ### 1.4 安装额外工具
 
-tg-rcore-tutorial-ch2 的构建脚本需要 `cargo-clone`（用于自动下载用户程序 crate）和 `rust-objcopy`（用于将 ELF 转为二进制）：
+本实验发布到 crates.io 的包中已经内置了 `tg-user` 用户程序源码快照，因此正常复现不再依赖 `cargo-clone`。构建时仍需要 `rust-objcopy`（用于将 ELF 转为二进制）：
 
 ```bash
-cargo install cargo-clone
 # rust-objcopy 由 cargo-binutils 提供
 cargo install cargo-binutils
 rustup component add llvm-tools
@@ -131,22 +158,23 @@ rustup component add llvm-tools
 **方式一：只获取本实验**
 
 ```bash
-cargo clone tg-rcore-tutorial-ch2
-cd tg-rcore-tutorial-ch2
+cargo clone joshua912815-tg-rcore-tutorial-ch2-moving-tangram
+cd joshua912815-tg-rcore-tutorial-ch2-moving-tangram
 ```
 
 **方式二：获取所有实验**
 
 ```bash
-git clone --recurse-submodules https://github.com/rcore-os/tg-rcore-tutorial.git
-cd tg-rcore-tutorial-ch2
+git clone https://github.com/Joshua912815/tg-rcore-tutorial.git
+cd tg-rcore-tutorial/tg-rcore-tutorial-ch2
+git checkout ch2-moving-tangram-crate-v0.1.1-preview.1
 ```
 
 ## 二、编译与运行
 
 ### 2.1 编译
 
-在 `tg-rcore-tutorial-ch2`（或 `tg-rcore-tutorial-ch2`）目录下执行：
+在 crate 根目录下执行：
 
 ```bash
 cargo build
@@ -155,13 +183,13 @@ cargo build
 编译过程比第一章复杂，`build.rs` 会自动完成以下工作：
 
 1. **生成链接脚本**：使用 `tg_linker::NOBIOS_SCRIPT` 生成内核的内存布局
-2. **下载用户程序**：自动通过 `cargo clone` 获取 `tg-rcore-tutorial-user` crate（包含用户测试程序）
+2. **使用内置用户程序源码**：直接编译包内 `tg-user/` 快照中的用户程序
 3. **编译用户程序**：为每个用户程序交叉编译到 RISC-V 64 目标
 4. **生成 APP_ASM**：生成汇编文件，将所有用户程序的二进制数据内联到内核镜像中
 
 > 环境变量说明：
-> - `TG_USER_DIR`：指定本地 tg-rcore-tutorial-user 源码路径（跳过自动下载）
-> - `TG_USER_VERSION`：指定 tg-rcore-tutorial-user 版本（默认 `0.2.0-preview.1`）
+> - `TG_USER_DIR`：指定本地 tg-user 源码路径（默认使用包内 `tg-user/`）
+> - `TG_USER_VERSION`：指定 tg-user 版本号（默认 `0.4.8`）
 > - `TG_SKIP_USER_APPS`：设置后跳过用户程序编译（生成空的占位 APP_ASM）
 > - `LOG`：设置日志级别（如 `LOG=INFO`、`LOG=TRACE`）
 
@@ -176,20 +204,22 @@ cargo run
 ```bash
 qemu-system-riscv64 \
     -machine virt \
-    -nographic \
+    -serial mon:stdio \
     -bios none \
-    -kernel target/riscv64gc-unknown-none-elf/debug/tg-rcore-tutorial-ch2
+    -device virtio-gpu-device,bus=virtio-mmio-bus.0 \
+    -kernel target/riscv64gc-unknown-none-elf/debug/joshua912815-tg-rcore-tutorial-ch2-moving-tangram
 ```
 
 ### 2.3 预期输出
 
 ```
-[tg-rcore-tutorial-ch2 0.3.1-preview.1] Hello, world!
+[joshua912815-tg-rcore-tutorial-ch2-moving-tangram 0.1.1-preview.1] Hello, world!
 [ INFO] .data [0x802xxxxx, 0x802xxxxx)
 [ WARN] boot_stack top=bottom=0x802xxxxx, lower_bound=0x802xxxxx
 [ERROR] .bss [0x802xxxxx, 0x802xxxxx)
-[ INFO] load app0 to 0x802xxxxx
-Hello world from user mode program!
+[ INFO] load app0 to 0x82000000
+[ INFO] GPU initialized: 1280x800
+[ INFO] move tangram piece 0
 [ INFO] app0 exit with code 0
 
 [ INFO] load app1 to 0x802xxxxx

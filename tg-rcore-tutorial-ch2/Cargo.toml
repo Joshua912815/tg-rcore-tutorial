@@ -1,19 +1,34 @@
 [package]
-name = "tg-rcore-tutorial-ch2"
-description = "Chapter 2 of rCore Tutorial: Batch processing system with privilege levels and trap handling."
-version = "0.4.8"
+name = "joshua912815-tg-rcore-tutorial-ch2-moving-tangram"
+description = "A self-contained crates.io package for the ch2 moving tangram game experiment of tg-rcore-tutorial."
+version = "0.1.1-preview.1"
 edition = "2024"
 authors = ["YdrMaster <ydrml@hotmail.com>","Yifan Wang<w-yf22@mails.tsinghua.edu.cn>","Yu Chen <yuchen@tsinghua.edu.cn>"]
-repository = "https://github.com/rcore-os/tg-rcore-tutorial-ch2"
-homepage = "https://github.com/rcore-os/tg-rcore-tutorial-ch2/tree/test"
-documentation = "https://docs.rs/tg-rcore-tutorial-ch2"
+repository = "https://github.com/Joshua912815/tg-rcore-tutorial"
+homepage = "https://github.com/Joshua912815/tg-rcore-tutorial/tree/ch2-moving-tangram-crate-v0.1.1-preview.1/tg-rcore-tutorial-ch2"
+documentation = "https://docs.rs/joshua912815-tg-rcore-tutorial-ch2-moving-tangram"
 license = "GPL-3.0"
 readme = "README.md"
-keywords = ["rcore", "tutorial", "no-std", "riscv", "batch-system"]
+keywords = ["ai", "ai4ose", "kernel", "learning", "os"]
 categories = ["no-std", "embedded"]
-exclude = [
-    "tg-user/**",
-#    ".cargo/config.toml",
+include = [
+    ".cargo/config.toml",
+    ".gitignore",
+    "Cargo.toml",
+    "Cargo.lock",
+    "README.md",
+    "build.rs",
+    "rust-toolchain.toml",
+    "src/**",
+    "docs/**",
+    "test.sh",
+    "tg-user/Cargo.user.toml",
+    "tg-user/Cargo.lock",
+    "tg-user/README.md",
+    "tg-user/build.rs",
+    "tg-user/cases.toml",
+    "tg-user/.cargo/config.toml",
+    "tg-user/src/**",
 ]
 
 [profile.dev]
