@@ -1,11 +1,11 @@
 [package]
 name = "tg-rcore-tutorial-ch5-basic"
 description = "Standalone reproducible crate for the Chapter 5 basic lab of tg-rcore-tutorial."
-version = "0.5.0-preview.1"
+version = "0.5.0-preview.2"
 edition = "2024"
 authors = ["Joshua", "YdrMaster <ydrml@hotmail.com>", "Yifan Wang <w-yf22@mails.tsinghua.edu.cn>", "Yu Chen <yuchen@tsinghua.edu.cn>"]
 repository = "https://github.com/Joshua912815/tg-rcore-tutorial"
-homepage = "https://github.com/Joshua912815/tg-rcore-tutorial/tree/codex/ch5-basic-crate/standalone/tg-rcore-tutorial-ch5-basic"
+homepage = "https://github.com/Joshua912815/tg-rcore-tutorial/tree/ch5-basic-crate-v0.5.0-preview.2/standalone/tg-rcore-tutorial-ch5-basic"
 documentation = "https://docs.rs/tg-rcore-tutorial-ch5-basic"
 license = "GPL-3.0"
 readme = "README.md"

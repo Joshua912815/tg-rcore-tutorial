@@ -7,9 +7,9 @@
 - Chapter：5
 - crates.io crate 名：`tg-rcore-tutorial-ch5-basic`
 - 仓库地址：[Joshua912815/tg-rcore-tutorial](https://github.com/Joshua912815/tg-rcore-tutorial)
-- 对应 tag：`ch5-basic-crate-v0.5.0-preview.1`
+- 对应 tag：`ch5-basic-crate-v0.5.0-preview.2`
 - 独立 crate 目录：`standalone/tg-rcore-tutorial-ch5-basic`
-- 版本：`0.5.0-preview.1`
+- 版本：`0.5.0-preview.2`
 
 ## 实验内容
 
@@ -83,4 +83,9 @@ make test-exercise
 - `./test.sh base`
 - `./test.sh exercise`
 
-发布时对应的实际结果会以当前 tag 版本为准。
+当前版本对应的实际结果：
+
+- 工作树：`./test.sh base -> 14/14`
+- 工作树：`./test.sh exercise -> 17/17`
+- 解压包：`./test.sh base -> 14/14`
+- 解压包：`./test.sh exercise -> 17/17`
