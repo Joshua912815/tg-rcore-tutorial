@@ -1,5 +1,7 @@
+use flate2::read::GzDecoder;
 use serde::Deserialize;
 use std::{collections::HashMap, env, fs, path::PathBuf, process::Command};
+use tar::Archive;
 
 const TARGET_ARCH: &str = "riscv64gc-unknown-none-elf";
 
@@ -18,6 +20,7 @@ fn main() {
     println!("cargo:rerun-if-env-changed=TG_USER_CRATE");
     println!("cargo:rerun-if-env-changed=TG_USER_LOCAL_DIR");
     println!("cargo:rerun-if-env-changed=CARGO_FEATURE_EXERCISE");
+    println!("cargo:rerun-if-changed=assets/tg-rcore-tutorial-user.tar.gz");
 
     let target_arch = env::var("CARGO_CFG_TARGET_ARCH").unwrap_or_default();
     if target_arch == "riscv64" {
@@ -224,6 +227,10 @@ fn ensure_tg_user() -> PathBuf {
         return vendored;
     }
 
+    if let Some(extracted) = extract_tg_user_archive(&manifest_dir) {
+        return extracted;
+    }
+
     let crate_name = env::var("TG_USER_CRATE")
         .expect("TG_USER_CRATE not set; add it to .cargo/config.toml [env]");
     let local_dir_name = env::var("TG_USER_LOCAL_DIR")
@@ -282,4 +289,56 @@ fn ensure_workspace_table(dir: &PathBuf) {
         fs::write(&cargo_toml, format!("{content}\n[workspace]\n"))
             .unwrap_or_else(|e| panic!("failed to append [workspace] to {}: {e}", cargo_toml.display()));
     }
+}
+
+fn extract_tg_user_archive(manifest_dir: &PathBuf) -> Option<PathBuf> {
+    let archive_path = manifest_dir.join("assets").join("tg-rcore-tutorial-user.tar.gz");
+    if !archive_path.exists() {
+        return None;
+    }
+
+    let extracted_root = PathBuf::from(env::var_os("OUT_DIR").unwrap()).join("tg-user-archive");
+    let extracted_dir = extracted_root.join("tg-rcore-tutorial-user");
+    if extracted_dir.join("Cargo.toml").exists() {
+        ensure_workspace_table(&extracted_dir);
+        return Some(extracted_dir);
+    }
+
+    if extracted_root.exists() {
+        fs::remove_dir_all(&extracted_root).unwrap_or_else(|e| {
+            panic!(
+                "failed to remove old extracted tg-user archive at {}: {e}",
+                extracted_root.display()
+            )
+        });
+    }
+    fs::create_dir_all(&extracted_root).unwrap_or_else(|e| {
+        panic!(
+            "failed to create extraction directory for tg-user archive at {}: {e}",
+            extracted_root.display()
+        )
+    });
+
+    let file = fs::File::open(&archive_path)
+        .unwrap_or_else(|e| panic!("failed to open {}: {e}", archive_path.display()));
+    let decoder = GzDecoder::new(file);
+    let mut archive = Archive::new(decoder);
+    archive.unpack(&extracted_root).unwrap_or_else(|e| {
+        panic!(
+            "failed to unpack tg-user archive {} into {}: {e}",
+            archive_path.display(),
+            extracted_root.display()
+        )
+    });
+
+    if !extracted_dir.join("Cargo.toml").exists() {
+        panic!(
+            "tg-user archive {} did not produce a crate at {}",
+            archive_path.display(),
+            extracted_dir.display()
+        );
+    }
+
+    ensure_workspace_table(&extracted_dir);
+    Some(extracted_dir)
 }

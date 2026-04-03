@@ -74,7 +74,8 @@ cargo run
 - `cargo package`
 - 在干净 Docker 环境中执行 `./test.sh base`，结果 `Test PASSED: 4/4`
 - 在干净 Docker 环境中执行 `./test.sh exercise`，结果 `Test PASSED: 7/7`
-- 后续还会对 `target/package/*.crate` 解压目录做独立复现，确保发布包本身可用
+- 在 `target/package/*.crate` 解压目录中顺序执行 `./test.sh base`，结果 `Test PASSED: 4/4`
+- 在 `target/package/*.crate` 解压目录中顺序执行 `./test.sh exercise`，结果 `Test PASSED: 7/7`
 
 最终结果以实际发布版本对应的 tag 为准；本 README 会与发布版本保持一致。
 
