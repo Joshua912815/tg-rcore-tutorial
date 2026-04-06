@@ -54,7 +54,7 @@ dependencies = [
 
 [[package]]
 name = "joshua912815-tg-rcore-tutorial-t2l21"
-version = "0.21.0-preview.2"
+version = "0.21.0-preview.3"
 dependencies = [
  "riscv",
  "serde",

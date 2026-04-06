@@ -273,6 +273,17 @@ fn ensure_tg_user() -> PathBuf {
         }
     }
 
+    let bundle_path = manifest_dir
+        .join("bundle")
+        .join("tg-rcore-tutorial-user.tar.gz");
+    if bundle_path.exists() {
+        extract_tg_user_bundle(&bundle_path, &manifest_dir, &local_dir_name);
+        if tg_user_dir.join("Cargo.toml").exists() {
+            ensure_workspace_table(&tg_user_dir);
+            return tg_user_dir;
+        }
+    }
+
     // 从 crates.io 克隆指定包
     let crate_spec = format!("{crate_name}@{version}");
     let status = Command::new("cargo")
@@ -303,6 +314,36 @@ fn ensure_tg_user() -> PathBuf {
     ensure_workspace_table(&tg_user_dir);
 
     tg_user_dir
+}
+
+fn extract_tg_user_bundle(bundle_path: &PathBuf, manifest_dir: &PathBuf, local_dir_name: &str) {
+    let status = Command::new("tar")
+        .current_dir(manifest_dir)
+        .args([
+            "-xzf",
+            bundle_path.to_string_lossy().as_ref(),
+            "-C",
+            manifest_dir.to_string_lossy().as_ref(),
+        ])
+        .status()
+        .unwrap_or_else(|err| panic!("failed to execute tar for {}: {}", bundle_path.display(), err));
+
+    if !status.success() {
+        panic!(
+            "failed to extract bundled tg-user archive {} into {}",
+            bundle_path.display(),
+            manifest_dir.display()
+        );
+    }
+
+    let extracted_dir = manifest_dir.join(local_dir_name);
+    if !extracted_dir.join("Cargo.toml").exists() {
+        panic!(
+            "bundled tg-user archive {} did not produce {}",
+            bundle_path.display(),
+            extracted_dir.display()
+        );
+    }
 }
 
 /// 若 Cargo.toml 末尾尚无 [workspace] 表，则追加一个空的，

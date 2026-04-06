@@ -5,10 +5,10 @@
 ## Crate 信息
 
 - crate 名称：`joshua912815-tg-rcore-tutorial-t2l21`
-- 版本：`0.21.0-preview.2`
+- 版本：`0.21.0-preview.3`
 - 仓库：[Joshua912815/tg-rcore-tutorial](https://github.com/Joshua912815/tg-rcore-tutorial)
 - 分支：`t2l21-observe`
-- 建议 tag：`joshua912815-tg-rcore-tutorial-t2l21-v0.21.0-preview.2`
+- 建议 tag：`joshua912815-tg-rcore-tutorial-t2l21-v0.21.0-preview.3`
 - keywords：`ai` `ai4ose` `kernel` `learning` `os`
 
 ## 解决的问题
@@ -33,7 +33,7 @@
 ## 目录结构
 
 - `src/`：观测版内核实现
-- `tg-rcore-tutorial-user/`：随 crate 打包的 user workload
+- `bundle/tg-rcore-tutorial-user.tar.gz`：随 crate 打包的最小 user workload bundle，构建时自动解包
 - `docs/`：实验说明、开发记录、设计总结
 - `scripts/`：GDB 与 Docker 复现脚本
 - `report.md`：最终提交版报告入口

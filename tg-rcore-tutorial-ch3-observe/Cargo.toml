@@ -1,7 +1,7 @@
 [package]
 name = "joshua912815-tg-rcore-tutorial-t2l21"
 description = "T2L21 observability-focused tg-rCore Chapter 3 experiment crate."
-version = "0.21.0-preview.2"
+version = "0.21.0-preview.3"
 edition = "2024"
 authors = ["Joshua <joshua912815@users.noreply.github.com>"]
 repository = "https://github.com/Joshua912815/tg-rcore-tutorial"
@@ -28,13 +28,7 @@ include = [
     "gdb/**",
     "docs/**",
     "test.sh",
-    "tg-rcore-tutorial-user/.gitignore",
-    "tg-rcore-tutorial-user/Cargo.lock",
-    "tg-rcore-tutorial-user/Cargo.toml",
-    "tg-rcore-tutorial-user/README.md",
-    "tg-rcore-tutorial-user/build.rs",
-    "tg-rcore-tutorial-user/cases.toml",
-    "tg-rcore-tutorial-user/src/**",
+    "bundle/tg-rcore-tutorial-user.tar.gz",
 ]
 
 [features]

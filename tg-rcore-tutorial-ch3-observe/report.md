@@ -47,4 +47,5 @@
 - `docs/task2-t21-logbook.md`：开发记录
 - `test.sh`：本地回归
 - `scripts/t21-docker-regression.sh`：Docker 回归，内置工具链准备逻辑，保证从干净环境首次运行也能稳定复现
+- `bundle/tg-rcore-tutorial-user.tar.gz`：最小 user crate bundle，避免 crates.io 打包时丢失嵌套 user crate
 - `scripts/launch-qemu-gdb.sh` 与 `gdb/t2l21.gdb`：GDB 复现
