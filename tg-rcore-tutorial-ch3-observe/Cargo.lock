@@ -53,6 +53,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "joshua912815-tg-rcore-tutorial-t2l21"
+version = "0.21.0-preview.1"
+dependencies = [
+ "riscv",
+ "serde",
+ "tg-rcore-tutorial-console",
+ "tg-rcore-tutorial-kernel-context",
+ "tg-rcore-tutorial-linker",
+ "tg-rcore-tutorial-sbi",
+ "tg-rcore-tutorial-syscall",
+ "toml",
+]
+
+[[package]]
 name = "lock_api"
 version = "0.4.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -189,22 +203,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "tg-rcore-tutorial-ch3-observe"
-version = "0.4.8"
-dependencies = [
- "riscv",
- "serde",
- "tg-rcore-tutorial-console",
- "tg-rcore-tutorial-kernel-context",
- "tg-rcore-tutorial-linker",
- "tg-rcore-tutorial-sbi",
- "tg-rcore-tutorial-syscall",
- "toml",
-]
-
-[[package]]
 name = "tg-rcore-tutorial-console"
 version = "0.4.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "33af8c7a47caa3e38b43f153a3065d1edc33b2509964e3a88a4596b272b408de"
 dependencies = [
  "log",
  "spin",
@@ -213,18 +215,26 @@ dependencies = [
 [[package]]
 name = "tg-rcore-tutorial-kernel-context"
 version = "0.4.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c86a06032213c9c08e8ea8ef7acb5612f6abededa6fd3fc663b03d0bcae49fab"
 
 [[package]]
 name = "tg-rcore-tutorial-linker"
 version = "0.4.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "63b199183449ed076ff8f3e23e4389a264256ad9a3674da7444d4e93994c8cdd"
 
 [[package]]
 name = "tg-rcore-tutorial-sbi"
 version = "0.4.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2b7b393aa703ee8b3a8598fb8937f632bdb610619f6d0242b6fcabb663243cb0"
 
 [[package]]
 name = "tg-rcore-tutorial-signal-defs"
 version = "0.4.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "73733a667decd8bdb25f28a78f3bafa0e9b4d8b48aa777f4c4d9ed90420e5599"
 dependencies = [
  "numeric-enum-macro",
 ]
@@ -232,6 +242,8 @@ dependencies = [
 [[package]]
 name = "tg-rcore-tutorial-syscall"
 version = "0.4.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7ee2dc6424685d804aaa33c64790b619b869b4f99bc05e80693e25058714736b"
 dependencies = [
  "bitflags",
  "spin",

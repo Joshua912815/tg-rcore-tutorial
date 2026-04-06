@@ -1,25 +1,50 @@
 [package]
-name = "tg-rcore-tutorial-ch3-observe"
-description = "T2L21 observability edition of Chapter 3 for tg-rCore tutorial."
-version = "0.4.8"
+name = "joshua912815-tg-rcore-tutorial-t2l21"
+description = "T2L21 observability-focused tg-rCore Chapter 3 experiment crate."
+version = "0.21.0-preview.1"
 edition = "2024"
-authors = ["YdrMaster <ydrml@hotmail.com>","Yifan Wang<w-yf22@mails.tsinghua.edu.cn>","Yu Chen <yuchen@tsinghua.edu.cn>"]
-repository = "https://github.com/rcore-os/tg-rcore-tutorial"
-homepage = "https://github.com/rcore-os/tg-rcore-tutorial/tree/test/tg-rcore-tutorial-ch3-observe"
-documentation = "https://docs.rs/tg-rcore-tutorial-ch3-observe"
+authors = ["Joshua <joshua912815@users.noreply.github.com>"]
+repository = "https://github.com/Joshua912815/tg-rcore-tutorial"
+homepage = "https://github.com/Joshua912815/tg-rcore-tutorial/tree/t2l21-observe/tg-rcore-tutorial-ch3-observe"
+documentation = "https://docs.rs/joshua912815-tg-rcore-tutorial-t2l21"
 license = "GPL-3.0"
 readme = "README.md"
-keywords = ["rcore", "tutorial", "observe", "riscv", "multitasking"]
+keywords = ["ai", "ai4ose", "kernel", "learning", "os"]
 categories = ["no-std", "embedded"]
-exclude = [
-    "tg-user/**",
-#    ".cargo/config.toml",
+include = [
+    ".cargo/config.toml",
+    ".gitignore",
+    "Cargo.lock",
+    "Cargo.toml",
+    "LICENSE",
+    "Makefile",
+    "README.md",
+    "report.md",
+    "rust-toolchain.toml",
+    "build.rs",
+    "exercise.md",
+    "src/**",
+    "scripts/**",
+    "gdb/**",
+    "docs/**",
+    "test.sh",
+    "tg-rcore-tutorial-user/.gitignore",
+    "tg-rcore-tutorial-user/Cargo.lock",
+    "tg-rcore-tutorial-user/Cargo.toml",
+    "tg-rcore-tutorial-user/README.md",
+    "tg-rcore-tutorial-user/build.rs",
+    "tg-rcore-tutorial-user/cases.toml",
+    "tg-rcore-tutorial-user/src/**",
 ]
 
 [features]
 coop = []
 exercise = []
 crash-demo = []
+
+[[bin]]
+name = "tg-rcore-tutorial-ch3-observe"
+path = "src/main.rs"
 
 [profile.dev]
 panic = "abort"
@@ -30,13 +55,13 @@ panic = "abort"
 [dependencies]
 riscv = "0.10.1"
 
-tg-sbi = { package = "tg-rcore-tutorial-sbi", path = "../tg-rcore-tutorial-sbi", version = "0.4.8", features = ["nobios"] }
-tg-linker = { package = "tg-rcore-tutorial-linker", path = "../tg-rcore-tutorial-linker", version = "0.4.8" }
-tg-console = { package = "tg-rcore-tutorial-console", path = "../tg-rcore-tutorial-console", version = "0.4.8" }
-tg-kernel-context = { package = "tg-rcore-tutorial-kernel-context", path = "../tg-rcore-tutorial-kernel-context", version = "0.4.8" }
-tg-syscall = { package = "tg-rcore-tutorial-syscall", path = "../tg-rcore-tutorial-syscall", version = "0.4.8", features = ["kernel"] }
+tg-sbi = { package = "tg-rcore-tutorial-sbi", version = "=0.4.8", features = ["nobios"] }
+tg-linker = { package = "tg-rcore-tutorial-linker", version = "=0.4.8" }
+tg-console = { package = "tg-rcore-tutorial-console", version = "=0.4.8" }
+tg-kernel-context = { package = "tg-rcore-tutorial-kernel-context", version = "=0.4.8" }
+tg-syscall = { package = "tg-rcore-tutorial-syscall", version = "=0.4.8", features = ["kernel"] }
 
 [build-dependencies]
-tg-linker = { package = "tg-rcore-tutorial-linker", path = "../tg-rcore-tutorial-linker", version = "0.4.8" }
+tg-linker = { package = "tg-rcore-tutorial-linker", version = "=0.4.8" }
 serde = { version = "1", features = ["derive"] }
 toml = "0.8"

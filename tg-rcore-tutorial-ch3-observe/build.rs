@@ -150,20 +150,30 @@ fn build_user_app(tg_user_root: &PathBuf, name: &str, base_address: u64) {
 
 fn objcopy_to_bin(elf: &PathBuf) -> PathBuf {
     let bin = elf.with_extension("bin");
-    let status = Command::new("rust-objcopy")
-        .args([
-            elf.to_string_lossy().as_ref(),
-            "--strip-all",
-            "-O",
-            "binary",
-            bin.to_string_lossy().as_ref(),
-        ])
-        .status()
-        .expect("failed to execute rust-objcopy");
-    if !status.success() {
-        panic!("rust-objcopy failed for {}", elf.display());
+
+    let candidates = ["rust-objcopy", "llvm-objcopy", "riscv64-unknown-elf-objcopy"];
+    for tool in candidates {
+        let status = Command::new(tool)
+            .args([
+                elf.to_string_lossy().as_ref(),
+                "--strip-all",
+                "-O",
+                "binary",
+                bin.to_string_lossy().as_ref(),
+            ])
+            .status();
+
+        match status {
+            Ok(status) if status.success() => return bin,
+            Ok(_) => continue,
+            Err(_) => continue,
+        }
     }
-    bin
+
+    panic!(
+        "failed to convert {} to raw binary; install one of rust-objcopy / llvm-objcopy / riscv64-unknown-elf-objcopy",
+        elf.display()
+    );
 }
 
 fn write_app_asm(path: &PathBuf, base: u64, step: u64, bins: &[PathBuf]) {

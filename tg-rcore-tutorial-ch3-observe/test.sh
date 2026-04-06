@@ -3,7 +3,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
-OUT_DIR="${ROOT}/../target/t21"
+OUT_DIR="${ROOT}/target/t21"
+RUN_TIMEOUT="${RUN_TIMEOUT:-120s}"
 mkdir -p "${OUT_DIR}"
 
 if command -v rg >/dev/null 2>&1; then
@@ -38,7 +39,7 @@ check_contains() {
 
 run_base() {
     local log_file="${OUT_DIR}/ch3-observe-base.log"
-    run_with_timeout 30s cargo run >"${log_file}" 2>&1
+    run_with_timeout "${RUN_TIMEOUT}" cargo run >"${log_file}" 2>&1
     check_contains "${log_file}" "T21 ch3 normal OK!" "normal workload completed"
     check_contains "${log_file}" "T21 ch3 breakpoint resumed" "breakpoint workload resumed"
     check_contains "${log_file}" "\\[OBS\\]\\[breakpoint\\].*step=" "breakpoint step recorded"
@@ -50,7 +51,7 @@ run_base() {
 
 run_crash() {
     local log_file="${OUT_DIR}/ch3-observe-crash.log"
-    run_with_timeout 30s cargo run --features crash-demo >"${log_file}" 2>&1
+    run_with_timeout "${RUN_TIMEOUT}" cargo run --features crash-demo >"${log_file}" 2>&1
     check_contains "${log_file}" "T21 crash trigger" "crash workload started"
     check_contains "${log_file}" "\\[OBS\\]\\[snapshot\\] reason=trace-crash" "crash snapshot emitted"
     check_contains "${log_file}" "\\[OBS\\]\\[panic\\] breadcrumb_depth=" "panic breadcrumb header emitted"
