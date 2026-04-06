@@ -5,10 +5,10 @@
 ## Crate 信息
 
 - crate 名称：`joshua912815-tg-rcore-tutorial-t2l21`
-- 版本：`0.21.0-preview.1`
+- 版本：`0.21.0-preview.2`
 - 仓库：[Joshua912815/tg-rcore-tutorial](https://github.com/Joshua912815/tg-rcore-tutorial)
 - 分支：`t2l21-observe`
-- 建议 tag：`joshua912815-tg-rcore-tutorial-t2l21-v0.21.0-preview.1`
+- 建议 tag：`joshua912815-tg-rcore-tutorial-t2l21-v0.21.0-preview.2`
 - keywords：`ai` `ai4ose` `kernel` `learning` `os`
 
 ## 解决的问题
