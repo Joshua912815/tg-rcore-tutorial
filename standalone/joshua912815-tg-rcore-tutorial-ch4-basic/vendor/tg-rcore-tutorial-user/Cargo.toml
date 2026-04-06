@@ -1,0 +1,26 @@
+[package]
+name = "tg-rcore-tutorial-user"
+description = "Minimal bundled user-space apps for Chapter 4 basic lab reproduction."
+version = "0.4.8"
+edition = "2024"
+authors = ["YdrMaster <ydrml@hotmail.com>", "Joshua912815"]
+license = "GPL-3.0"
+repository = "https://github.com/Joshua912815/tg-rcore-tutorial"
+readme = "README.md"
+
+[lib]
+name = "user_lib"
+path = "src/lib.rs"
+
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+panic = "abort"
+
+[dependencies]
+tg-console = { package = "tg-rcore-tutorial-console", version = "0.4.8" }
+tg-syscall = { package = "tg-rcore-tutorial-syscall", version = "0.4.8", features = ["user"] }
+customizable-buddy = "0.0.2"
+
+[workspace]

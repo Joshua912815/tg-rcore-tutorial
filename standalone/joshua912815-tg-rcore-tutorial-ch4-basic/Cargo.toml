@@ -1,0 +1,54 @@
+[package]
+name = "joshua912815-tg-rcore-tutorial-ch4-basic"
+description = "Standalone reproducible crate for the Chapter 4 basic lab of tg-rcore-tutorial."
+version = "0.4.0-preview.1"
+edition = "2024"
+authors = ["Joshua912815"]
+license = "GPL-3.0"
+repository = "https://github.com/Joshua912815/tg-rcore-tutorial"
+homepage = "https://github.com/Joshua912815/tg-rcore-tutorial/tree/ch4-basic-crate-v0.4.0-preview.1/standalone/joshua912815-tg-rcore-tutorial-ch4-basic"
+documentation = "https://docs.rs/joshua912815-tg-rcore-tutorial-ch4-basic"
+readme = "README.md"
+keywords = ["ai", "ai4ose", "kernel", "learning", "os"]
+categories = ["no-std", "embedded"]
+include = [
+    "Cargo.toml",
+    "README.md",
+    "LICENSE",
+    "build.rs",
+    "test.sh",
+    ".cargo/config.toml",
+    "src/**",
+    "docs/**",
+    "vendor/tg-rcore-tutorial-user/.cargo/config.toml",
+    "vendor/tg-rcore-tutorial-user/build.rs",
+    "vendor/tg-rcore-tutorial-user/Cargo.toml",
+    "vendor/tg-rcore-tutorial-user/cases.toml",
+    "vendor/tg-rcore-tutorial-user/README.md",
+    "vendor/tg-rcore-tutorial-user/src/**",
+]
+
+[features]
+exercise = []
+
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+panic = "abort"
+
+[dependencies]
+xmas-elf = "0.8.0"
+riscv = "0.10.1"
+tg-sbi = { package = "tg-rcore-tutorial-sbi", version = "0.4.8", features = ["nobios"] }
+tg-linker = { package = "tg-rcore-tutorial-linker", version = "0.4.8" }
+tg-console = { package = "tg-rcore-tutorial-console", version = "0.4.8" }
+tg-kernel-context = { package = "tg-rcore-tutorial-kernel-context", version = "0.4.8", features = ["foreign"] }
+tg-kernel-alloc = { package = "tg-rcore-tutorial-kernel-alloc", version = "0.4.8" }
+tg-kernel-vm = { package = "tg-rcore-tutorial-kernel-vm", version = "0.4.8" }
+tg-syscall = { package = "tg-rcore-tutorial-syscall", version = "0.4.8", features = ["kernel"] }
+
+[build-dependencies]
+tg-linker = { package = "tg-rcore-tutorial-linker", version = "0.4.8" }
+serde = { version = "1", features = ["derive"] }
+toml = "0.8"
