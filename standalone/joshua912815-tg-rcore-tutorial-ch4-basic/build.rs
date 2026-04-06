@@ -34,11 +34,7 @@ fn main() {
 }
 
 fn should_skip_build_apps() -> bool {
-    if env::var_os("TG_SKIP_USER_APPS").is_some() {
-        return true;
-    }
-
-    is_packaged_build()
+    env::var_os("TG_SKIP_USER_APPS").is_some()
 }
 
 fn write_linker() {
@@ -47,19 +43,6 @@ fn write_linker() {
         panic!("failed to write linker script to {}: {}", ld.display(), err)
     });
     println!("cargo:rustc-link-arg=-T{}", ld.display());
-}
-
-fn is_packaged_build() -> bool {
-    let out_dir = PathBuf::from(env::var_os("OUT_DIR").unwrap());
-    let out_dir = out_dir.to_string_lossy();
-
-    let manifest_dir = PathBuf::from(env::var_os("CARGO_MANIFEST_DIR").unwrap());
-    let manifest_dir = manifest_dir.to_string_lossy();
-
-    out_dir.contains("/target/package/")
-        || out_dir.contains("\\target\\package\\")
-        || manifest_dir.contains("/target/package/")
-        || manifest_dir.contains("\\target\\package\\")
 }
 
 fn build_apps() {
@@ -222,6 +205,42 @@ fn ensure_tg_user() -> PathBuf {
     if bundled_dir.join("Cargo.toml").exists() {
         ensure_workspace_table(&bundled_dir);
         return bundled_dir;
+    }
+
+    let bundle_archive = manifest_dir
+        .join("bundle")
+        .join("tg-rcore-tutorial-user-ch4.tar.gz");
+    if bundle_archive.exists() {
+        let out_dir = PathBuf::from(env::var_os("OUT_DIR").unwrap());
+        let extracted_root = out_dir.join("bundled-user");
+        let extracted_dir = extracted_root.join("tg-rcore-tutorial-user");
+        if !extracted_dir.join("Cargo.toml").exists() {
+            fs::create_dir_all(&extracted_root).unwrap_or_else(|err| {
+                panic!(
+                    "failed to create bundled user extract dir {}: {}",
+                    extracted_root.display(),
+                    err
+                )
+            });
+            let archive = fs::File::open(&bundle_archive).unwrap_or_else(|err| {
+                panic!(
+                    "failed to open bundled user archive {}: {}",
+                    bundle_archive.display(),
+                    err
+                )
+            });
+            let decoder = flate2::read::GzDecoder::new(archive);
+            let mut archive = tar::Archive::new(decoder);
+            archive.unpack(&extracted_root).unwrap_or_else(|err| {
+                panic!(
+                    "failed to unpack bundled user archive {}: {}",
+                    bundle_archive.display(),
+                    err
+                )
+            });
+        }
+        ensure_workspace_table(&extracted_dir);
+        return extracted_dir;
     }
 
     // 优先使用 TG_USER_DIR 显式指定的目录

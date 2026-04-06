@@ -44,7 +44,7 @@ cargo run
 
 在 `rcore-docker` 环境中，本 crate 已完成以下验证：
 
-- `cargo check`
+- `cargo check --features exercise`
 - `cargo package`
 - 从 `target/package/*.crate` 解压后的目录执行 `cargo check --features exercise`
 - `./test.sh base`
