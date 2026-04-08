@@ -1,0 +1,42 @@
+[package]
+name = "tg-rcore-tutorial-t2l9-smp"
+description = "Task 2 Lab 9: multicore-aware tutorial kernels for chapters 1 and 2 in one publishable crate."
+version = "0.1.0-preview.1"
+edition = "2024"
+authors = ["Joshua"]
+license = "GPL-3.0"
+repository = "https://github.com/Joshua912815/tg-rcore-tutorial"
+homepage = "https://github.com/Joshua912815/tg-rcore-tutorial/tree/codex/t2l9-multicore-ch1-ch2/tg-rcore-tutorial-t2l9-smp"
+documentation = "https://docs.rs/tg-rcore-tutorial-t2l9-smp"
+readme = "README.md"
+keywords = ["ai", "ai4ose", "kernel", "learning", "os"]
+categories = ["no-std", "embedded"]
+default-run = "t2l9-ch2-smp"
+include = [
+    "Cargo.toml",
+    "README.md",
+    "build.rs",
+    ".cargo/config.toml",
+    "rust-toolchain.toml",
+    "src/**",
+    "user-src/src/**",
+    "test.sh",
+]
+
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+panic = "abort"
+
+[dependencies]
+riscv = "0.10.1"
+
+tg-sbi = { package = "tg-rcore-tutorial-sbi", path = "../tg-rcore-tutorial-sbi", version = "0.4.8" }
+tg-linker = { package = "tg-rcore-tutorial-linker", path = "../tg-rcore-tutorial-linker", version = "0.4.8" }
+tg-console = { package = "tg-rcore-tutorial-console", path = "../tg-rcore-tutorial-console", version = "0.4.8" }
+tg-kernel-context = { package = "tg-rcore-tutorial-kernel-context", path = "../tg-rcore-tutorial-kernel-context", version = "0.4.8" }
+tg-syscall = { package = "tg-rcore-tutorial-syscall", path = "../tg-rcore-tutorial-syscall", version = "0.4.8", features = ["kernel"] }
+
+[build-dependencies]
+tg-linker = { package = "tg-rcore-tutorial-linker", path = "../tg-rcore-tutorial-linker", version = "0.4.8" }
