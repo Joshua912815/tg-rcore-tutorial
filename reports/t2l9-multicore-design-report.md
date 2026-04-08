@@ -5,7 +5,7 @@
 - 任务编号：`T2L9`
 - 任务主题：`ch1~ch2 扩展多核的能力`
 - 本次实现形成的独立 crate：`joshua912815-rcore-tutorial-t2l9-smp`
-- crate 版本：`0.1.0-preview.1`
+- crate 版本：`0.1.0-preview.2`
 - crate 交付形态：
   - `cargo run --bin t2l9-ch1-smp`
   - `cargo run` 或 `cargo run --bin t2l9-ch2-smp`
@@ -149,6 +149,39 @@ tg-rcore-tutorial-t2l9-smp/
 - `ch2`：boot hart 正常运行 4 个用户程序，secondary harts 输出 parked 状态。
 - 自动脚本 `./test.sh` 通过。
 
+### 5. 观测指标完成情况
+
+题目要求中明确提出：
+
+- 设计不同的测试环境和例子
+- 测试多核执行的特点和优势
+
+为满足这两点，我额外实现了 `observe.sh`，直接在 `-smp 1`、`-smp 2`、`-smp 4` 三种 QEMU 环境下运行两个实验目标。实际观测结果如下：
+
+| 观测环境 | ch1 观测结果 | ch2 观测结果 | 说明 |
+|---|---|---|---|
+| `-smp 1` | `platform_harts=1`，`all 1 harts reached S-mode` | `detected 1 harts`，`parked=0`，`hello=1`，`power_tests=3` | 证明系统不会错误依赖 secondary hart；单核环境下仍可正常完成批处理 |
+| `-smp 2` | `platform_harts=2`，`all 2 harts reached S-mode` | `detected 2 harts`，`parked=1`，`hello=1`，`power_tests=3` | 观察到最小多核角色分化：1 个 boot hart + 1 个 secondary hart |
+| `-smp 4` | `platform_harts=4`，`all 4 harts reached S-mode` | `detected 4 harts`，`parked=3`，`hello=1`，`power_tests=3` | 观察到完整多核启动链路，但批处理执行仍保持单核 |
+
+这些结果说明本实验已经覆盖了“不同测试环境”的要求，也能支持学生比较多核启动能力在不同 `-smp` 配置下的表现。
+
+### 6. 多核特点与优势分析
+
+通过上述观测结果，可以总结出三点多核特点与优势。
+
+第一，`ch1` 中的优势是“多核启动能力可见化”。
+
+原始 `ch1` 只能说明一个 hart 能否进入 S-mode；扩展后，学生可以直接看到不同数量的 hart 都能正确启动并分配独立栈。这让“多核启动”不再只是概念，而是可以通过日志直接验证的事实。
+
+第二，`ch2` 中的优势是“多核启动与单核执行的边界被明确区分”。
+
+在 `-smp 2` 和 `-smp 4` 环境下，secondary hart 都能被正确启动并停车，而 boot hart 独占批处理执行。这说明系统已经具备多核 bring-up 能力，但还没有进入真正的多核调度阶段。这个边界对教学非常关键。
+
+第三，不同 `-smp` 环境下的输出差异本身就是多核编程现象。
+
+在更高并发下，共享串口输出会更容易产生交错和竞争。为了让观测指标稳定，我在 `ch1/ch2` 的 console 实现里额外加了最小串口锁。这也让学生看到：即使只是“打印日志”，在多核里也会立刻变成同步问题。
+
 ## 四、与 AI 合作的实现过程
 
 ### 1. AI 的使用方式
@@ -203,6 +236,17 @@ tg-rcore-tutorial-t2l9-smp/
 - 主 crate 的 `build.rs` 在构建时自动编译这些用户程序，并生成 `APP_ASM`。
 
 这样就把“仓库内路径依赖”改造成了“包内源码依赖”，满足了独立性要求。
+
+#### 问题四：并发串口输出交错导致观测结果不稳定
+
+在补做观测指标时，我一开始直接统计日志中的 `hart online` 和 `secondary hart` 文本出现次数。结果发现 `-smp 2/4` 环境下输出会被多个 hart 交错写入，导致统计不稳定。
+
+修正方式：
+
+- 给 `ch1/ch2` 的 console 实现加了最小串口锁。
+- 让 `observe.sh` 统计更稳定的模式，例如 `platform_harts`、`parked` 和 `power_tests`。
+
+这个问题再次说明：多核里最先暴露出来的 bug 往往不是调度，而是共享资源访问。
 
 ### 3. 对 AI 协作效果的评价
 
