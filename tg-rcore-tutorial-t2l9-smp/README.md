@@ -12,6 +12,7 @@
 - `ch2` 需要的用户程序源码内置在 `user-src/` 模板目录中，由主包 `build.rs` 动态生成临时 user crate 后自动编译
 - QEMU runner 固定为 `-smp 4`
 - 关键词按任务要求设置为：`ai` `ai4ose` `kernel` `learning` `os`
+- 设计总结报告随 crate 一起打包，见 `t2l9-multicore-design-report.md`
 
 ## 运行方式
 
@@ -99,6 +100,7 @@ cargo run
 tg-rcore-tutorial-t2l9-smp/
 ├── .cargo/config.toml
 ├── build.rs
+├── t2l9-multicore-design-report.md
 ├── src/
 │   ├── lib.rs
 │   └── bin/
@@ -122,5 +124,5 @@ tg-rcore-tutorial-t2l9-smp/
 在真正 `cargo publish` 之前，建议先做三件事：
 
 1. 将当前仓库推到你自己的远程仓库。
-2. 为本 crate 打一个与版本一致的 tag，例如 `joshua912815-rcore-tutorial-t2l9-smp-v0.1.0-preview.2`。
+2. 为本 crate 打一个与版本一致的 tag，例如 `joshua912815-rcore-tutorial-t2l9-smp-v0.1.0-preview.3`。
 3. 根据你的远程仓库地址补全 `Cargo.toml` 中的 `repository` / `homepage`。
