@@ -8,12 +8,35 @@ use core::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 /// Number of harts expected by the lab runner.
 pub const HART_COUNT: usize = 4;
+const MAX_HART_SCAN: usize = 8;
 
 const SBI_EXT_HSM: usize = 0x48534D;
 const HSM_HART_START: usize = 0;
+const HSM_HART_STATUS: usize = 2;
 
 static CONSOLE_READY: AtomicBool = AtomicBool::new(false);
 static BOOT_HART: AtomicUsize = AtomicUsize::new(usize::MAX);
+
+/// Discovered hart set.
+#[derive(Clone, Copy)]
+pub struct HartSet {
+    ids: [usize; MAX_HART_SCAN],
+    len: usize,
+}
+
+impl HartSet {
+    /// Number of discovered harts.
+    #[inline]
+    pub const fn len(&self) -> usize {
+        self.len
+    }
+
+    /// All discovered hart IDs as a slice.
+    #[inline]
+    pub fn ids(&self) -> &[usize] {
+        &self.ids[..self.len]
+    }
+}
 
 /// Claim the boot-hart role for the first hart that reaches the kernel.
 #[inline]
@@ -44,9 +67,24 @@ pub fn wait_for_console() {
     }
 }
 
+/// Discover harts visible to the SBI HSM extension.
+pub fn detect_harts() -> HartSet {
+    let mut set = HartSet {
+        ids: [0; MAX_HART_SCAN],
+        len: 0,
+    };
+    for hart_id in 0..MAX_HART_SCAN {
+        if hart_get_status(hart_id).is_ok() {
+            set.ids[set.len] = hart_id;
+            set.len += 1;
+        }
+    }
+    set
+}
+
 /// Start all other harts from the current boot hart.
-pub fn start_secondary_harts(boot_hart_id: usize, entry: usize) -> Result<(), isize> {
-    for hart_id in 0..HART_COUNT {
+pub fn start_secondary_harts(harts: &HartSet, boot_hart_id: usize, entry: usize) -> Result<(), isize> {
+    for &hart_id in harts.ids() {
         if hart_id == boot_hart_id {
             continue;
         }
@@ -58,6 +96,16 @@ pub fn start_secondary_harts(boot_hart_id: usize, entry: usize) -> Result<(), is
 /// Start one hart through the SBI HSM extension.
 pub fn hart_start(hart_id: usize, entry: usize, opaque: usize) -> Result<usize, isize> {
     let (error, value) = sbi_call(SBI_EXT_HSM, HSM_HART_START, hart_id, entry, opaque);
+    if error == 0 {
+        Ok(value)
+    } else {
+        Err(error)
+    }
+}
+
+/// Query a hart status through SBI HSM.
+pub fn hart_get_status(hart_id: usize) -> Result<usize, isize> {
+    let (error, value) = sbi_call(SBI_EXT_HSM, HSM_HART_STATUS, hart_id, 0, 0);
     if error == 0 {
         Ok(value)
     } else {

@@ -1,7 +1,7 @@
 [package]
 name = "joshua912815-rcore-tutorial-t2l9-smp"
 description = "Task 2 Lab 9: multicore-aware tutorial kernels for chapters 1 and 2 in one publishable crate."
-version = "0.1.0-preview.1"
+version = "0.1.0-preview.2"
 edition = "2024"
 authors = ["Joshua"]
 license = "GPL-3.0"
@@ -20,6 +20,7 @@ include = [
     "rust-toolchain.toml",
     "src/**",
     "user-src/src/**",
+    "observe.sh",
     "test.sh",
 ]
 

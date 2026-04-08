@@ -8,15 +8,28 @@
 #[macro_use]
 extern crate tg_console;
 
-use core::sync::atomic::{AtomicUsize, Ordering};
+use core::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use tg_console::log;
 use joshua912815_rcore_tutorial_t2l9_smp::{
-    claim_boot_hart, mark_console_ready, start_secondary_harts, wait_for_console, HART_COUNT,
+    claim_boot_hart, detect_harts, mark_console_ready, start_secondary_harts, wait_for_console,
+    HART_COUNT,
 };
 use tg_sbi::shutdown;
 
 const STACK_SIZE: usize = 4096;
 static ONLINE: AtomicUsize = AtomicUsize::new(0);
+static CONSOLE_LOCK: AtomicBool = AtomicBool::new(false);
+
+fn with_console_lock(f: impl FnOnce()) {
+    while CONSOLE_LOCK
+        .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
+        .is_err()
+    {
+        core::hint::spin_loop();
+    }
+    f();
+    CONSOLE_LOCK.store(false, Ordering::Release);
+}
 
 #[repr(align(4096))]
 struct BootStacks(#[allow(dead_code)] [u8; STACK_SIZE * HART_COUNT]);
@@ -44,27 +57,29 @@ unsafe extern "C" fn _start() -> ! {
 
 extern "C" fn rust_main(hart_id: usize, _opaque: usize) -> ! {
     if claim_boot_hart(hart_id) {
+        let harts = detect_harts();
+        let total = harts.len();
         tg_console::init_console(&Console);
         tg_console::set_log_level(option_env!("LOG").or(Some("info")));
         mark_console_ready();
 
         let order = ONLINE.fetch_add(1, Ordering::SeqCst) + 1;
-        println!("[T2L9/ch1] hart {hart_id} online ({order}/{HART_COUNT})");
+        println!("[T2L9/ch1] hart {hart_id} online ({order}/{total})");
 
-        if let Err(error) = start_secondary_harts(hart_id, _start as *const () as usize) {
+        if let Err(error) = start_secondary_harts(&harts, hart_id, _start as *const () as usize) {
             log::error!("failed to start secondary harts via SBI HSM: {error}");
             shutdown(true);
         }
 
-        while ONLINE.load(Ordering::Acquire) < HART_COUNT {
+        while ONLINE.load(Ordering::Acquire) < total {
             core::hint::spin_loop();
         }
-        println!("[T2L9/ch1] all {HART_COUNT} harts reached S-mode");
+        println!("[T2L9/ch1] all {total} harts reached S-mode");
         shutdown(false)
     } else {
         wait_for_console();
         let order = ONLINE.fetch_add(1, Ordering::SeqCst) + 1;
-        println!("[T2L9/ch1] hart {hart_id} online ({order}/{HART_COUNT})");
+        println!("[T2L9/ch1] hart {hart_id} online ({order}/?)");
         loop {
             unsafe { core::arch::asm!("wfi") };
         }
@@ -82,7 +97,15 @@ struct Console;
 impl tg_console::Console for Console {
     #[inline]
     fn put_char(&self, c: u8) {
-        tg_sbi::console_putchar(c);
+        with_console_lock(|| tg_sbi::console_putchar(c));
+    }
+
+    fn put_str(&self, s: &str) {
+        with_console_lock(|| {
+            for c in s.bytes() {
+                tg_sbi::console_putchar(c);
+            }
+        });
     }
 }
 

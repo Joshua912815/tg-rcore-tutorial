@@ -53,6 +53,46 @@ cargo run
 
 测试脚本会依次运行 `ch1` 和 `ch2` 两个目标，并检查核心输出。
 
+## 观测指标与实验环境
+
+题目要求不仅要“能跑”，还要能在不同测试环境下观察多核特征。本 crate 额外提供：
+
+```bash
+./observe.sh
+```
+
+它会直接调用 QEMU，分别在 `-smp 1`、`-smp 2`、`-smp 4` 三种环境下运行 `ch1` 和 `ch2`，输出以下观测项：
+
+- `ch1`
+  - 在线 hart 数量
+  - `all N harts reached S-mode` 汇总信息
+- `ch2`
+  - 检测到的 hart 数量
+  - parked 的 secondary hart 数量
+  - 用户程序执行是否完整
+
+建议用这三个环境做对比：
+
+| 环境 | 主要观察点 | 结论 |
+|---|---|---|
+| `-smp 1` | 只有 boot hart 运行 | 证明代码不会错误依赖 secondary hart |
+| `-smp 2` | 1 个 secondary hart 被启动并停车 | 观察最小多核带来的角色分化 |
+| `-smp 4` | 多个 secondary hart 并行启动 | 观察多核启动链路、输出交错和独立栈效果 |
+
+对应的多核特点与优势：
+
+- `ch1` 中，更多 hart 能更快完成“同时进入 S-mode 并上线”的目标，直观看到多核启动能力。
+- `ch2` 中，虽然只有 boot hart 执行应用，但 secondary hart 已经被正确带起并进入可控状态，这为后续真正的多核调度提供了基础。
+- 随着 `-smp` 数增加，日志里会出现更明显的并发打印交错，这正好反映了多核环境下共享输出设备的真实现象。
+
+本仓库当前一次实际观测结果如下：
+
+| 实验 | `-smp 1` | `-smp 2` | `-smp 4` |
+|---|---|---|---|
+| `ch1` | `all 1 harts reached S-mode` | `all 2 harts reached S-mode` | `all 4 harts reached S-mode` |
+| `ch2` | `detected 1 harts, parked=0` | `detected 2 harts, parked=1` | `detected 4 harts, parked=3` |
+| 用户程序执行 | 1 个 hello + 3 个 power 测试全部通过 | 同左 | 同左 |
+
 ## 目录结构
 
 ```text
@@ -64,6 +104,7 @@ tg-rcore-tutorial-t2l9-smp/
 │   └── bin/
 │       ├── t2l9-ch1-smp.rs
 │       └── t2l9-ch2-smp.rs
+├── observe.sh
 ├── user-src/
 │   └── src/
 │       ├── lib.rs
@@ -81,5 +122,5 @@ tg-rcore-tutorial-t2l9-smp/
 在真正 `cargo publish` 之前，建议先做三件事：
 
 1. 将当前仓库推到你自己的远程仓库。
-2. 为本 crate 打一个与版本一致的 tag，例如 `joshua912815-rcore-tutorial-t2l9-smp-v0.1.0-preview.1`。
+2. 为本 crate 打一个与版本一致的 tag，例如 `joshua912815-rcore-tutorial-t2l9-smp-v0.1.0-preview.2`。
 3. 根据你的远程仓库地址补全 `Cargo.toml` 中的 `repository` / `homepage`。

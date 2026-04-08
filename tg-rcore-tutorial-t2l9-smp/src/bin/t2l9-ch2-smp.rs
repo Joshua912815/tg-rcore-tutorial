@@ -8,12 +8,14 @@
 #[macro_use]
 extern crate tg_console;
 
+use core::sync::atomic::{AtomicBool, Ordering};
 use impls::{Console, SyscallContext};
 use riscv::register::*;
 use tg_console::log;
 use tg_kernel_context::LocalContext;
 use joshua912815_rcore_tutorial_t2l9_smp::{
-    claim_boot_hart, mark_console_ready, start_secondary_harts, wait_for_console, HART_COUNT,
+    claim_boot_hart, detect_harts, mark_console_ready, start_secondary_harts, wait_for_console,
+    HART_COUNT,
 };
 use tg_sbi;
 use tg_syscall::{Caller, SyscallId};
@@ -22,12 +24,24 @@ use tg_syscall::{Caller, SyscallId};
 core::arch::global_asm!(include_str!(env!("APP_ASM")));
 
 const STACK_SIZE: usize = 8 * 4096;
+static CONSOLE_LOCK: AtomicBool = AtomicBool::new(false);
 
 #[repr(align(4096))]
 struct BootStacks(#[allow(dead_code)] [u8; STACK_SIZE * HART_COUNT]);
 
 #[unsafe(link_section = ".boot.stack")]
 static mut BOOT_STACKS: BootStacks = BootStacks([0; STACK_SIZE * HART_COUNT]);
+
+fn with_console_lock(f: impl FnOnce()) {
+    while CONSOLE_LOCK
+        .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
+        .is_err()
+    {
+        core::hint::spin_loop();
+    }
+    f();
+    CONSOLE_LOCK.store(false, Ordering::Release);
+}
 
 #[cfg(target_arch = "riscv64")]
 #[unsafe(naked)]
@@ -57,14 +71,18 @@ extern "C" fn rust_main(hart_id: usize, _opaque: usize) -> ! {
     }
 
     unsafe { tg_linker::KernelLayout::locate().zero_bss() };
+    let harts = detect_harts();
 
     tg_console::init_console(&Console);
     tg_console::set_log_level(option_env!("LOG").or(Some("info")));
     tg_console::test_log();
     mark_console_ready();
 
-    println!("[T2L9/ch2] boot hart {hart_id} initializing batch kernel");
-    if let Err(error) = start_secondary_harts(hart_id, _start as *const () as usize) {
+    println!(
+        "[T2L9/ch2] boot hart {hart_id} initializing batch kernel (detected {} harts)",
+        harts.len()
+    );
+    if let Err(error) = start_secondary_harts(&harts, hart_id, _start as *const () as usize) {
         log::error!("failed to start secondary harts via SBI HSM: {error}");
         tg_sbi::shutdown(true);
     }
@@ -140,6 +158,7 @@ fn handle_syscall(ctx: &mut LocalContext) -> SyscallResult {
 }
 
 mod impls {
+    use super::with_console_lock;
     use tg_syscall::{STDDEBUG, STDOUT};
 
     pub struct Console;
@@ -147,7 +166,15 @@ mod impls {
     impl tg_console::Console for Console {
         #[inline]
         fn put_char(&self, c: u8) {
-            tg_sbi::console_putchar(c);
+            with_console_lock(|| tg_sbi::console_putchar(c));
+        }
+
+        fn put_str(&self, s: &str) {
+            with_console_lock(|| {
+                for c in s.bytes() {
+                    tg_sbi::console_putchar(c);
+                }
+            });
         }
     }
 
