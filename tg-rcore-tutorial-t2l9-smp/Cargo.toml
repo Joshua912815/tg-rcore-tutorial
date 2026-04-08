@@ -1,5 +1,5 @@
 [package]
-name = "tg-rcore-tutorial-t2l9-smp"
+name = "joshua912815-rcore-tutorial-t2l9-smp"
 description = "Task 2 Lab 9: multicore-aware tutorial kernels for chapters 1 and 2 in one publishable crate."
 version = "0.1.0-preview.1"
 edition = "2024"
@@ -7,7 +7,7 @@ authors = ["Joshua"]
 license = "GPL-3.0"
 repository = "https://github.com/Joshua912815/tg-rcore-tutorial"
 homepage = "https://github.com/Joshua912815/tg-rcore-tutorial/tree/codex/t2l9-multicore-ch1-ch2/tg-rcore-tutorial-t2l9-smp"
-documentation = "https://docs.rs/tg-rcore-tutorial-t2l9-smp"
+documentation = "https://docs.rs/joshua912815-rcore-tutorial-t2l9-smp"
 readme = "README.md"
 keywords = ["ai", "ai4ose", "kernel", "learning", "os"]
 categories = ["no-std", "embedded"]

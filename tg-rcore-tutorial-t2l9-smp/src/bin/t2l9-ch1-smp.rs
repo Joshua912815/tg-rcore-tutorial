@@ -10,7 +10,7 @@ extern crate tg_console;
 
 use core::sync::atomic::{AtomicUsize, Ordering};
 use tg_console::log;
-use tg_rcore_tutorial_t2l9_smp::{
+use joshua912815_rcore_tutorial_t2l9_smp::{
     claim_boot_hart, mark_console_ready, start_secondary_harts, wait_for_console, HART_COUNT,
 };
 use tg_sbi::shutdown;

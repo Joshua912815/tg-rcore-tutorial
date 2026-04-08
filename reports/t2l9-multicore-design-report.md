@@ -4,7 +4,7 @@
 
 - 任务编号：`T2L9`
 - 任务主题：`ch1~ch2 扩展多核的能力`
-- 本次实现形成的独立 crate：`tg-rcore-tutorial-t2l9-smp`
+- 本次实现形成的独立 crate：`joshua912815-rcore-tutorial-t2l9-smp`
 - crate 版本：`0.1.0-preview.1`
 - crate 交付形态：
   - `cargo run --bin t2l9-ch1-smp`

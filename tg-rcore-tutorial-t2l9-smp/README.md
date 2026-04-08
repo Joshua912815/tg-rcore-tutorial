@@ -1,6 +1,6 @@
-# tg-rcore-tutorial-t2l9-smp
+# joshua912815-rcore-tutorial-t2l9-smp
 
-`tg-rcore-tutorial-t2l9-smp` 是一个面向 `TASK2.md` 中 `T2L9` 的独立实验 crate。  
+`joshua912815-rcore-tutorial-t2l9-smp` 是一个面向 `TASK2.md` 中 `T2L9` 的独立实验 crate。  
 它把“`ch1~ch2` 扩展多核能力”做成了一个可发布、可复现、单 crate 交付的教学实验：
 
 - `t2l9-ch1-smp`：基于 `ch1` 的多核启动实验
@@ -81,5 +81,5 @@ tg-rcore-tutorial-t2l9-smp/
 在真正 `cargo publish` 之前，建议先做三件事：
 
 1. 将当前仓库推到你自己的远程仓库。
-2. 为本 crate 打一个与版本一致的 tag，例如 `tg-rcore-tutorial-t2l9-smp-v0.1.0-preview.1`。
+2. 为本 crate 打一个与版本一致的 tag，例如 `joshua912815-rcore-tutorial-t2l9-smp-v0.1.0-preview.1`。
 3. 根据你的远程仓库地址补全 `Cargo.toml` 中的 `repository` / `homepage`。

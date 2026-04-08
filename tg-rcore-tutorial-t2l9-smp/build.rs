@@ -108,7 +108,7 @@ fn copy_dir_recursive(src: &PathBuf, dst: &PathBuf) {
 
 fn generated_user_manifest() -> &'static str {
     r#"[package]
-name = "tg-rcore-tutorial-t2l9-smp-user"
+name = "joshua912815-rcore-tutorial-t2l9-smp-user"
 version = "0.1.0-preview.1"
 edition = "2024"
 publish = false
